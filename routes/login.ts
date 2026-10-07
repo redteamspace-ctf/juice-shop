@@ -30,8 +30,14 @@ export function login () {
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === null || typeof req.body !== 'object') {
+      res.status(401).send(res.__('Invalid email or password.'))
+      return
+    }
     verifyPreLoginChallenges(req) // vuln-code-snippet hide-line
-    models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: UserModel, plain: true }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
+    const email = typeof req.body.email === 'string' ? req.body.email : ''
+    const password = typeof req.body.password === 'string' ? req.body.password : ''
+    models.sequelize.query('SELECT * FROM Users WHERE email = $email AND password = $password AND deletedAt IS NULL', { bind: { email, password: security.hash(password) }, model: UserModel, plain: true }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
       .then((authenticatedUser) => { // vuln-code-snippet neutral-line loginAdminChallenge loginBenderChallenge loginJimChallenge
         const user = utils.queryResultToJson(authenticatedUser)
         if (user.data?.id && user.data.totpSecret !== '') {

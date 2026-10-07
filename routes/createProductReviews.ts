@@ -13,6 +13,10 @@ import * as utils from '../lib/utils'
 
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
+    const productId = Number(req.params.id)
+    if (!/^\d+$/.test(req.params.id) || !Number.isSafeInteger(productId)) {
+      return res.status(400).json({ error: 'Invalid product' })
+    }
     const user = security.authenticatedUsers.from(req)
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
@@ -21,9 +25,9 @@ export function createProductReviews () {
 
     try {
       await reviewsCollection.insert({
-        product: req.params.id,
+        product: productId,
         message: req.body.message,
-        author: req.body.author,
+        author: user?.data?.email ?? 'Anonymous',
         likesCount: 0,
         likedBy: []
       })
