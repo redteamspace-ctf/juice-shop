@@ -72,6 +72,10 @@ export class UserService {
     return this.http.get(this.hostServer + '/rest/saveLoginIp').pipe(map((response: any) => response), catchError((err) => { throw err }))
   }
 
+  endSession (token: string) {
+    return this.http.post(this.hostServer + '/rest/user/logout', {}, { headers: { Authorization: `Bearer ${token}` } })
+  }
+
   deluxeStatus () {
     return this.http.get(this.hostServer + '/rest/deluxe-membership').pipe(map((response: any) => response.data), catchError((err) => { throw err }))
   }

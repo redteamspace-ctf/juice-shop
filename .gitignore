@@ -13,6 +13,7 @@ i18n/*.invalid
 !frontend/src/assets/i18n/*.json
 !data/static/i18n/*.json
 /data/juiceshop.sqlite-journal
+/data/.jwt-auth/
 
 # Build
 .nyc_output/

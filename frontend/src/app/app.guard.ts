@@ -4,9 +4,12 @@
  */
 
 import { type CanActivate, Router } from '@angular/router'
+import { HttpClient } from '@angular/common/http'
 import { jwtDecode } from 'jwt-decode'
 import { roles } from './roles'
 import { Injectable, NgZone, inject } from '@angular/core'
+import { catchError, map, of } from 'rxjs'
+import { environment } from '../environments/environment'
 
 @Injectable()
 export class LoginGuard implements CanActivate {
@@ -47,16 +50,17 @@ export class LoginGuard implements CanActivate {
 @Injectable()
 export class AdminGuard implements CanActivate {
   private readonly loginGuard = inject(LoginGuard)
+  private readonly http = inject(HttpClient)
 
 
   canActivate () {
-    const payload = this.loginGuard.tokenDecode()
-    if (payload?.data && payload.data.role === roles.admin) {
-      return true
-    } else {
-      this.loginGuard.forbidRoute()
-      return false
-    }
+    return this.http.get(environment.hostServer + '/rest/admin/authorize', { observe: 'response' }).pipe(
+      map(() => true),
+      catchError(() => {
+        this.loginGuard.forbidRoute()
+        return of(false)
+      })
+    )
   }
 }
 

@@ -66,6 +66,7 @@ import datacreator from './data/datacreator'
 import locales from './data/static/locales.json'
 
 import { login } from './routes/login'
+import { logout } from './routes/logout'
 import * as verify from './routes/verify'
 import * as address from './routes/address'
 import * as metrics from './routes/metrics'
@@ -119,6 +120,7 @@ import { updateProductReviews } from './routes/updateProductReviews'
 import { servePrivacyPolicyProof } from './routes/privacyPolicyProof'
 import { profileImageUrlUpload } from './routes/profileImageUrlUpload'
 import { profileImageFileUpload } from './routes/profileImageFileUpload'
+import { restrictUserRegistration } from './routes/restrictUserRegistration'
 import { serveCodeFixes, checkCorrectFix } from './routes/vulnCodeFixes'
 import { imageCaptchas, verifyImageCaptcha } from './routes/imageCaptcha'
 import { upgradeToDeluxe, deluxeMembershipStatus } from './routes/deluxe'
@@ -129,6 +131,16 @@ import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType
 
 const app = express()
 const server = new http.Server(app)
+
+async function requireAdmin (req: Request, res: Response, next: NextFunction) {
+  const userId = security.authenticatedUsers.from(req)?.data?.id
+  const user = userId != null ? await UserModel.findByPk(userId) : null
+  if (user?.role === security.roles.admin) {
+    next()
+  } else {
+    res.sendStatus(403)
+  }
+}
 
 // errorhandler requires us from overwriting a string property on it's module which is a big no-no with esmodules :/
 
@@ -264,6 +276,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   }
 
+  app.use('/support/logs', (_req: Request, res: Response) => { res.sendStatus(403) })
+
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
@@ -288,6 +302,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(express.static(path.resolve('frontend/dist/frontend')))
   app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
+  app.use(security.rehydrateAuthenticatedUsers())
 
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
@@ -347,6 +362,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
+  app.get('/api/Users', security.isAuthorized(), utils.asyncHandler(requireAdmin))
+  app.get('/api/Users/:id', security.isAuthorized(), utils.asyncHandler(requireAdmin))
+  app.delete('/api/Feedbacks/:id', security.isAuthorized(), utils.asyncHandler(requireAdmin))
+
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
@@ -394,7 +413,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), utils.asyncHandler(requireAdmin))
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
@@ -416,6 +435,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  app.post('/api/Users', restrictUserRegistration())
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
@@ -593,6 +613,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Custom Restful API */
   app.post('/rest/user/login', login())
+  app.post('/rest/user/logout', logout())
   app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
@@ -604,6 +625,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.put('/rest/basket/:id/coupon/:coupon', utils.asyncHandler(applyCoupon()))
   app.get('/rest/admin/application-version', utils.asyncHandler(retrieveAppVersion()))
   app.get('/rest/admin/application-configuration', utils.asyncHandler(retrieveAppConfiguration()))
+  app.get('/rest/admin/authorize', security.isAuthorized(), utils.asyncHandler(requireAdmin), (_req: Request, res: Response) => { res.sendStatus(204) })
   app.get('/rest/repeat-notification', utils.asyncHandler(repeatNotification()))
   app.get('/rest/continue-code', utils.asyncHandler(continueCode()))
   app.get('/rest/continue-code-findIt', utils.asyncHandler(continueCodeFindIt()))

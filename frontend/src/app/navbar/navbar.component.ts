@@ -236,7 +236,11 @@ export class NavbarComponent implements OnInit {
   }
 
   logout () {
-    this.userService.saveLastLoginIp().subscribe({ next: () => { this.noop() }, error: (err) => { console.log(err) } })
+    const token = localStorage.getItem('token')
+    const endSession = () => {
+      if (token) this.userService.endSession?.(token)?.subscribe({ error: (err) => { console.log(err) } })
+    }
+    this.userService.saveLastLoginIp().subscribe({ next: endSession, error: endSession })
     localStorage.removeItem('token')
     this.cookieService.remove('token')
     sessionStorage.removeItem('bid')
@@ -288,8 +292,6 @@ export class NavbarComponent implements OnInit {
     this.sidenavToggle.emit()
   }
 
-
-  noop () { }
 
   getLanguages () {
     this.langService.getLanguages().subscribe((res: any[]) => {

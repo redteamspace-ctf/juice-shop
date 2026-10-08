@@ -91,7 +91,11 @@ export class SidenavComponent implements OnInit {
   }
 
   logout () {
-    this.userService.saveLastLoginIp().subscribe({ next: () => { this.noop() }, error: (err) => { console.log(err) } })
+    const token = localStorage.getItem('token')
+    const endSession = () => {
+      if (token) this.userService.endSession?.(token)?.subscribe({ error: (err) => { console.log(err) } })
+    }
+    this.userService.saveLastLoginIp().subscribe({ next: endSession, error: endSession })
     localStorage.removeItem('token')
     this.cookieService.remove('token')
     sessionStorage.removeItem('bid')
@@ -109,8 +113,6 @@ export class SidenavComponent implements OnInit {
     window.location.replace(environment.hostServer + '/dataerasure')
   }
 
-
-  noop () { }
 
   getScoreBoardStatus () {
     this.challengeService.find({ name: 'Score Board' }).subscribe({
