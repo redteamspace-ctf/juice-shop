@@ -7,12 +7,13 @@ import sinon from 'sinon'
 import chai from 'chai'
 import sinonChai from 'sinon-chai'
 import { retrieveLoggedInUser } from '../../routes/currentUser'
-import { authenticatedUsers } from '../../lib/insecurity'
+import { authenticatedUsers, authorize } from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
 const expect = chai.expect
 chai.use(sinonChai)
 
 describe('currentUser', () => {
+  const token = authorize({ data: { id: 1 } })
   let req: any
   let res: any
 
@@ -30,10 +31,10 @@ describe('currentUser', () => {
   })
 
   it('should return ID and email of user belonging to cookie from the request', () => {
-    req.cookies.token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0'
+    req.cookies.token = token
     req.query.callback = undefined
     authenticatedUsers.put(
-      'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0',
+      token,
       { data: { id: 1, email: 'admin@juice-sh.op', lastLoginIp: '0.0.0.0', profileImage: '/assets/public/images/uploads/default.svg' } as unknown as UserModel }
     )
     retrieveLoggedInUser()(req, res)

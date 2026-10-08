@@ -7,13 +7,11 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
-import { challenges } from '../../data/datacache'
-import * as utils from '../../lib/utils'
 import * as security from '../../lib/insecurity'
 import { createTestApp } from './helpers/setup'
 
 let app: Express
-const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
+const authHeader = { Authorization: 'Bearer ' + security.authorize({ data: { id: 1 } }), 'content-type': 'application/json' }
 
 before(async () => {
   const result = await createTestApp()
@@ -21,39 +19,22 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('/b2b/v2/orders', () => {
-  if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-    void it('POST endless loop exploit in "orderLinesData" will raise explicit error', async () => {
+  for (const { name, orderLinesData } of [
+    { name: 'an infinite loop', orderLinesData: '(function dos() { while(true); })()' },
+    { name: 'a pathological regular expression', orderLinesData: '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")' },
+    { name: 'a sandbox breakout', orderLinesData: 'this.constructor.constructor("return process")().exit()' }
+  ]) {
+    void it(`POST does not evaluate ${name} in orderLinesData`, async () => {
+      const start = Date.now()
       const res = await request(app)
         .post('/b2b/v2/orders')
         .set(authHeader)
-        .send({
-          orderLinesData: '(function dos() { while(true); })()'
-        })
+        .send({ orderLinesData })
 
-      assert.equal(res.status, 500)
-      assert.ok(res.text.includes('Infinite loop detected - reached max iterations'))
-    })
-
-    void it('POST busy spinning regex attack does not raise an error', async () => {
-      const res = await request(app)
-        .post('/b2b/v2/orders')
-        .set(authHeader)
-        .send({
-          orderLinesData: '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
-        })
-
-      assert.equal(res.status, 503)
-    })
-
-    void it('POST sandbox breakout attack in "orderLinesData" will raise error', async () => {
-      const res = await request(app)
-        .post('/b2b/v2/orders')
-        .set(authHeader)
-        .send({
-          orderLinesData: 'this.constructor.constructor("return process")().exit()'
-        })
-
-      assert.equal(res.status, 500)
+      assert.ok(Date.now() - start < 1800, 'Order processing should not evaluate orderLinesData')
+      assert.equal(res.status, 200)
+      assert.ok(res.body.orderNo)
+      assert.ok(res.body.paymentDue)
     })
   }
 
@@ -91,5 +72,27 @@ void describe('/b2b/v2/orders', () => {
 
     assert.equal(res.status, 200)
     assert.equal(res.body.cid, 'test')
+  })
+
+  void it('POST accepts an order with a token issued by the login endpoint', async () => {
+    const email = `b2b-${Date.now()}@local.test`
+    const password = 'CtfTester!23'
+    await request(app)
+      .post('/api/Users')
+      .send({ email, password, passwordRepeat: password, securityQuestion: null, securityAnswer: 'x' })
+
+    const login = await request(app)
+      .post('/rest/user/login')
+      .send({ email, password })
+    assert.equal(login.status, 200)
+
+    const res = await request(app)
+      .post('/b2b/v2/orders')
+      .set('Authorization', `Bearer ${login.body.authentication.token}`)
+      .send({ orderLinesData: 'while(true){}', cid: 'login-token-test' })
+
+    assert.equal(res.status, 200)
+    assert.ok(res.body.orderNo)
+    assert.ok(res.body.paymentDue)
   })
 })

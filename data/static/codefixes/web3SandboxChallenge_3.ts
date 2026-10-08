@@ -157,6 +157,7 @@ const routes: Routes = [
   },
   {
     path: 'wallet-web3',
+    canActivate: [LoginGuard],
     loadChildren: async () => await loadWeb3WalletModule()
   },
   {

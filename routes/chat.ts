@@ -144,7 +144,8 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          if (!Number.isSafeInteger(productId) || productId < 1) return []
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 

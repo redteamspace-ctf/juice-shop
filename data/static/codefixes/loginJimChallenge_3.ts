@@ -12,6 +12,10 @@ export function login () {
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
+    if (typeof req.body.email !== 'string' || typeof req.body.password !== 'string') {
+      res.status(400).send('Email and password must be strings')
+      return
+    }
     models.sequelize.query(`SELECT * FROM Users WHERE email = ? AND password = ? AND deletedAt IS NULL`,
       { replacements: [ req.body.email, req.body.password ], model: models.User, plain: true })
       .then((authenticatedUser) => {

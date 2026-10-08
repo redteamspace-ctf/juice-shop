@@ -36,8 +36,13 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
       res.status(401).send(res.__('Current password is not correct.'))
+      return
+    }
+
+    if (typeof newPassword !== 'string' || typeof repeatPassword !== 'string') {
+      res.status(400).send('Passwords must be strings')
       return
     }
 
@@ -48,12 +53,17 @@ export function changePassword () {
         return
       }
 
+      if (security.hash(currentPassword) !== user.password) {
+        res.status(401).send(res.__('Current password is not correct.'))
+        return
+      }
       await user.update({ password: newPasswordInString })
+      security.authenticatedUsers.revokeUserSessions(user.id)
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

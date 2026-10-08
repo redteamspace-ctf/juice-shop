@@ -23,7 +23,7 @@
 
           <ng-container matColumnDef="email">
             <mat-header-cell *matHeaderCellDef translate></mat-header-cell>
-            <mat-cell *matCellDef="let user" [innerHTML]="user.email" class="cell-middle"></mat-cell>
+            <mat-cell *matCellDef="let user" [textContent]="user.email" [class.confirmation]="doesUserHaveAnActiveSession(user)" [class.error]="!doesUserHaveAnActiveSession(user)" class="cell-middle"></mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="user_detail">
@@ -110,7 +110,7 @@
 
   <ng-container matColumnDef="email">
     <mat-header-cell *matHeaderCellDef translate></mat-header-cell>
-    <mat-cell *matCellDef="let user" [innerHTML]="user.email" class="cell-middle"></mat-cell>
+    <mat-cell *matCellDef="let user" [textContent]="user.email" [class.confirmation]="doesUserHaveAnActiveSession(user)" [class.error]="!doesUserHaveAnActiveSession(user)" class="cell-middle"></mat-cell>
   </ng-container>
 
   <ng-container matColumnDef="user_detail">

@@ -1,3 +1,4 @@
+import { SecurityContext } from '@angular/core'
 /*
  * Copyright (c) 2014-2026 Bjoern Kimminich & the OWASP Juice Shop contributors.
  * SPDX-License-Identifier: MIT
@@ -162,11 +163,12 @@ describe('SearchResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should render product descriptions as trusted HTML', () => {
+    it('sanitizes product descriptions before rendering', () => {
         productService.search.mockReturnValue(of([{ description: '<script>alert("XSS")</script>' }]))
         component.ngAfterViewInit()
         fixture.detectChanges()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>alert("XSS")</script>')
+        expect(sanitizer.sanitize).toHaveBeenCalledWith(SecurityContext.HTML, '<script>alert("XSS")</script>')
+        expect(sanitizer.bypassSecurityTrustHtml).not.toHaveBeenCalled()
     })
 
     it('should hold no products when product search API call fails', () => {
@@ -215,9 +217,12 @@ describe('SearchResultComponent', () => {
         expect(component.dataSource.filter).toEqual('product search')
     })
 
-    it('should pass the search query as trusted HTML', () => {
+    it('renders the search query as text', () => {
         activatedRoute.setQueryParameter('<script>scripttag</script>')
         component.filterTable()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>scripttag</script>')
+        fixture.detectChanges()
+        expect(fixture.nativeElement.querySelector('#searchValue').textContent).toBe('<script>scripttag</script>')
+        expect(fixture.nativeElement.querySelector('#searchValue script')).toBeNull()
+        expect(sanitizer.bypassSecurityTrustHtml).not.toHaveBeenCalled()
     })
 })

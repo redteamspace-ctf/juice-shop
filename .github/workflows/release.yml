@@ -4,8 +4,8 @@ on:
     tags:
       - v*
 env:
-  CYCLONEDX_NPM_VERSION: '^2.0.0||^3.0.0||^4.0.0'   # keep in sync with package.json
-  TYPESCRIPT_VERSION: '~5.3.3'                      # keep in sync with package.json
+  CYCLONEDX_NPM_VERSION: '4.2.1'                    # keep in sync with package.json
+  TYPESCRIPT_VERSION: '5.3.3'                       # keep in sync with package.json
 jobs:
   package:
     runs-on: ${{ matrix.os }}
@@ -25,7 +25,7 @@ jobs:
         run: |
           npm install -g typescript@${{ env.TYPESCRIPT_VERSION }}
           npm install -g @cyclonedx/cyclonedx-npm@${{ env.CYCLONEDX_NPM_VERSION }}
-          npm install -g grunt-cli
+          npm install -g grunt-cli@1.5.0
       - name: "Set packaging options for Grunt"
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
@@ -40,7 +40,7 @@ jobs:
         shell: bash
       - name: "Package application"
         run: |
-          npm install --production
+          npm ci --omit=dev
           npm run package:ci
       - name: 'Attach packaged archive to tag release'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 #v2.2.2

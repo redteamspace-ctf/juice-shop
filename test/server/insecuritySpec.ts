@@ -83,10 +83,11 @@ describe('insecurity', () => {
   })
 
   describe('authenticatedUsers', () => {
+    const token = security.authorize({ data: { id: 1 } })
     it('returns user by associated token', () => {
-      security.authenticatedUsers.put('11111', { data: { id: 1 } as unknown as UserModel })
+      security.authenticatedUsers.put(token, { data: { id: 1 } as unknown as UserModel })
 
-      expect(security.authenticatedUsers.get('11111')).to.deep.equal({ data: { id: 1 } })
+      expect(security.authenticatedUsers.get(token)).to.deep.equal({ data: { id: 1 } })
     })
 
     it('returns undefined if no token is passed in', () => {
@@ -94,15 +95,15 @@ describe('insecurity', () => {
     })
 
     it('returns token by associated user', () => {
-      security.authenticatedUsers.put('11111', { data: { id: 1 } as unknown as UserModel })
+      security.authenticatedUsers.put(token, { data: { id: 1 } as unknown as UserModel })
 
-      expect(security.authenticatedUsers.tokenOf({ id: 1 } as unknown as UserModel)).to.equal('11111')
+      expect(security.authenticatedUsers.tokenOf({ id: 1 } as unknown as UserModel)).to.equal(token)
     })
 
     it('returns user by associated token from request', () => {
-      security.authenticatedUsers.put('11111', { data: { id: 1 } as unknown as UserModel })
+      security.authenticatedUsers.put(token, { data: { id: 1 } as unknown as UserModel })
 
-      expect(security.authenticatedUsers.from({ headers: { authorization: 'Bearer 11111' } } as unknown as Request)).to.deep.equal({ data: { id: 1 } })
+      expect(security.authenticatedUsers.from({ headers: { authorization: `Bearer ${token}` } } as unknown as Request)).to.deep.equal({ data: { id: 1 } })
     })
 
     it('returns undefined if no token is present in request', () => {

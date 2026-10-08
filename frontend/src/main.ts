@@ -54,7 +54,6 @@ import { KeysService } from './app/Services/keys.service'
 import { ImageCaptchaService } from './app/Services/image-captcha.service'
 import { PaymentService } from './app/Services/payment.service'
 import { AdminGuard, LoginGuard, AccountingGuard, DeluxeGuard } from './app/app.guard'
-import { CookieService, CookieModule } from 'ngy-cookie'
 import { ChallengeService } from './app/Services/challenge.service'
 import { BasketService } from './app/Services/basket.service'
 import { RecycleService } from './app/Services/recycle.service'
@@ -81,7 +80,7 @@ if (environment.production) {
 bootstrapApplication(AppComponent, {
     providers: [
         provideZoneChangeDetection(),
-        importProvidersFrom(BrowserModule, Routing, TranslateModule.forRoot(), CookieModule.forRoot(), ReactiveFormsModule, FileUploadModule, MatToolbarModule, MatIconModule, FormsModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatSidenavModule, MatRippleModule, MatTableModule, MatPaginatorModule, MatCardModule, MatInputModule, MatCheckboxModule, MatDialogModule, MatDividerModule, MatNativeDateModule, MatExpansionModule, MatProgressBarModule, MatTooltipModule, MatMenuModule, MatListModule, MatButtonToggleModule, LayoutModule, MatGridListModule, MatBadgeModule, MatRadioModule, MatSnackBarModule, MatSliderModule, MatTabsModule, MatSlideToggleModule, MatChipsModule, MatAutocompleteModule),
+        importProvidersFrom(BrowserModule, Routing, TranslateModule.forRoot(), ReactiveFormsModule, FileUploadModule, MatToolbarModule, MatIconModule, FormsModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatSidenavModule, MatRippleModule, MatTableModule, MatPaginatorModule, MatCardModule, MatInputModule, MatCheckboxModule, MatDialogModule, MatDividerModule, MatNativeDateModule, MatExpansionModule, MatProgressBarModule, MatTooltipModule, MatMenuModule, MatListModule, MatButtonToggleModule, LayoutModule, MatGridListModule, MatBadgeModule, MatRadioModule, MatSnackBarModule, MatSliderModule, MatTabsModule, MatSlideToggleModule, MatChipsModule, MatAutocompleteModule),
         {
             provide: HTTP_INTERCEPTORS,
             useClass: RequestInterceptor,
@@ -103,7 +102,6 @@ bootstrapApplication(AppComponent, {
         RecycleService,
         BasketService,
         ChallengeService,
-        CookieService,
         AdminGuard,
         LoginGuard,
         PaymentService,

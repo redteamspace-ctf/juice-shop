@@ -110,6 +110,9 @@
                         MANDATORY_SECURITY_ANSWER
                       </mat-error>
                     }
+                    @if (securityAnswerControl.errors?.minlength) {
+                      <mat-error>Use at least 10 characters for your security answer.</mat-error>
+                    }
                   </mat-form-field>
                 </div>
 

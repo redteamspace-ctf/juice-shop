@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { WindowRefService } from '../Services/window-ref.service'
 import { ActivatedRoute, Router, RouterLink } from '@angular/router'
 import { Component, NgZone, type OnInit, inject } from '@angular/core'

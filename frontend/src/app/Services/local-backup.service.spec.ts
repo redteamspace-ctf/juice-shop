@@ -7,14 +7,23 @@ import { TestBed } from '@angular/core/testing'
 import { firstValueFrom, of, throwError } from 'rxjs'
 
 import { LocalBackupService } from './local-backup.service'
-import { CookieModule, CookieService } from 'ngy-cookie'
 import { TranslateNoOpLoader, TranslateLoader, TranslateModule } from '@ngx-translate/core'
 import { MatSnackBar } from '@angular/material/snack-bar'
 import { ChallengeService } from './challenge.service'
 
+const setCookie = (name: string, value: string) => {
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/`
+}
+
+const getCookie = (name: string) => {
+    const prefix = `${encodeURIComponent(name)}=`
+    const cookie = document.cookie.split('; ').find((entry) => entry.startsWith(prefix))
+
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : undefined
+}
+
 describe('LocalBackupService', () => {
     let snackBar: any
-    let cookieService: any
     let challengeService: any
 
     beforeEach(() => {
@@ -34,7 +43,6 @@ describe('LocalBackupService', () => {
 
         TestBed.configureTestingModule({
             imports: [
-                CookieModule.forRoot(),
                 TranslateModule.forRoot({
                     loader: {
                         provide: TranslateLoader,
@@ -45,11 +53,9 @@ describe('LocalBackupService', () => {
             providers: [
                 { provide: MatSnackBar, useValue: snackBar },
                 { provide: ChallengeService, useValue: challengeService },
-                CookieService,
                 LocalBackupService
             ]
         })
-        cookieService = TestBed.inject(CookieService)
     })
 
     it('should be created', () => {
@@ -62,7 +68,7 @@ describe('LocalBackupService', () => {
         const service = TestBed.inject(LocalBackupService)
         const saveFileSpy = vi.spyOn(service, 'saveFile').mockImplementation(() => {})
 
-        cookieService.put('language', 'de')
+        setCookie('language', 'de')
         await service.save()
 
         const blob = new Blob([JSON.stringify({ version: 1, language: 'de' })], { type: 'text/plain;charset=utf-8' })
@@ -71,17 +77,17 @@ describe('LocalBackupService', () => {
 
     it('should restore language from backup file', async () => {
         const service = TestBed.inject(LocalBackupService)
-        cookieService.put('language', 'de')
+        setCookie('language', 'de')
         await firstValueFrom(service.restore(new File(['{ "version": 1, "language": "cn" }'], 'test.json')))
-        expect(cookieService.get('language')).toBe('cn')
+        expect(getCookie('language')).toBe('cn')
         expect(snackBar.open).toHaveBeenCalled()
     })
 
     it('should not restore language from an outdated backup version', async () => {
         const service = TestBed.inject(LocalBackupService)
-        cookieService.put('language', 'de')
+        setCookie('language', 'de')
         await firstValueFrom(service.restore(new File(['{ "version": 0, "language": "cn" }'], 'test.json')))
-        expect(cookieService.get('language')).toBe('de')
+        expect(getCookie('language')).toBe('de')
         expect(snackBar.open).toHaveBeenCalled()
     })
 
@@ -90,9 +96,9 @@ describe('LocalBackupService', () => {
         const saveFileSpy = vi.spyOn(service, 'saveFile').mockImplementation(() => {})
 
         // ensure cookie fallback values exist
-        cookieService.put('continueCode', 'C1')
-        cookieService.put('continueCodeFindIt', 'C2')
-        cookieService.put('continueCodeFixIt', 'C3')
+        setCookie('continueCode', 'C1')
+        setCookie('continueCodeFindIt', 'C2')
+        setCookie('continueCodeFixIt', 'C3')
 
         // simulate server failure for continue codes
         challengeService.continueCode.mockReturnValue(throwError('Error'))

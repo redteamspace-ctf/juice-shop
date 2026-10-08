@@ -4,6 +4,7 @@
  */
 
 import chai from 'chai'
+import sinon from 'sinon'
 import { challenges } from '../../data/datacache'
 import { type Challenge } from 'data/types'
 import { checkUploadSize, checkFileType } from '../../routes/fileUpload'
@@ -17,7 +18,8 @@ describe('fileUpload', () => {
 
   beforeEach(() => {
     req = { file: { originalname: '' } }
-    res = {}
+    res = { status: sinon.stub(), json: sinon.spy() }
+    res.status.returns(res)
     save = () => ({
       then () { }
     })
@@ -37,13 +39,14 @@ describe('fileUpload', () => {
     })
   })
 
-  it('should solve "uploadSizeChallenge" when file size exceeds 100000 bytes', () => {
+  it('rejects files exceeding 100000 bytes', () => {
     challenges.uploadSizeChallenge = { solved: false, save } as unknown as Challenge
     req.file.size = 100001
 
     checkUploadSize(req, res, () => {})
 
-    expect(challenges.uploadSizeChallenge.solved).to.equal(true)
+    expect(challenges.uploadSizeChallenge.solved).to.equal(false)
+    expect(res.status.calledWith(413)).to.equal(true)
   })
 
   it('should solve "uploadTypeChallenge" when file type is not PDF', () => {

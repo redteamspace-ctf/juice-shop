@@ -151,9 +151,9 @@ describe('RegisterComponent', () => {
         component.passwordControl.setValue('password')
         component.repeatPasswordControl.setValue('password')
         component.securityQuestionControl.setValue(1)
-        component.securityAnswerControl.setValue('Answer')
-        const user = { email: 'x@x.xx', password: 'password', passwordRepeat: 'password', securityQuestion: { id: 1, question: 'Wat is?' }, securityAnswer: 'Answer' }
-        const securityAnswerObject = { UserId: 1, answer: 'Answer', SecurityQuestionId: 1 }
+        component.securityAnswerControl.setValue('A longer security answer')
+        const user = { email: 'x@x.xx', password: 'password', passwordRepeat: 'password', securityQuestion: { id: 1, question: 'Wat is?' }, securityAnswer: 'A longer security answer' }
+        const securityAnswerObject = { UserId: 1, answer: 'A longer security answer', SecurityQuestionId: 1 }
         component.save()
         await fixture.whenStable()
         expect(vi.mocked(userService.save).mock.calls[0][0]).toEqual(user)

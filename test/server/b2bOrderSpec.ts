@@ -15,56 +15,89 @@ chai.use(sinonChai)
 describe('b2bOrder', () => {
   let req: any
   let res: any
-  let next: any
   let save: any
 
   beforeEach(() => {
     req = { body: { } }
     res = { json: sinon.spy(), status: sinon.spy() }
-    next = sinon.spy()
+    res.status = sinon.stub().returns(res)
     save = () => ({
       then () { }
     })
     challenges.rceChallenge = { solved: false, save } as unknown as Challenge
   })
 
-  xit('infinite loop payload does not succeed but solves "rceChallenge"', () => { // FIXME Started failing on Linux regularly
-    req.body.orderLinesData = '(function dos() { while(true); })()'
+  for (const { name, orderLinesData } of [
+    { name: 'an infinite loop', orderLinesData: '(function dos() { while(true); })()' },
+    { name: 'a pathological regular expression', orderLinesData: '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")' },
+    { name: 'a sandbox breakout', orderLinesData: 'this.constructor.constructor("return process")().exit()' }
+  ]) {
+    it(`does not evaluate ${name} in orderLinesData`, () => {
+      req.body.orderLinesData = orderLinesData
 
-    b2bOrder()(req, res, next)
+      b2bOrder()(req, res)
 
-    expect(challenges.rceChallenge.solved).to.equal(true)
-  })
+      expect(res.json.calledOnce).to.equal(true)
+      expect(res.json.firstCall.args[0]).to.have.property('orderNo')
+      expect(res.json.firstCall.args[0]).to.have.property('paymentDue')
+      expect(res.status.called).to.equal(false)
+      expect(challenges.rceChallenge.solved).to.equal(false)
+    })
+  }
 
-  // FIXME Disabled as test started failing on Linux regularly
-  xit('timeout after 2 seconds solves "rceOccupyChallenge"', () => {
-    req.body.orderLinesData = '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
-
-    b2bOrder()(req, res, next)
-
-    expect(challenges.rceOccupyChallenge.solved).to.equal(true)
-  }/*, 3000 */)
-
-  it('deserializing JSON as documented in Swagger should not solve "rceChallenge"', () => {
+  it('accepts the documented JSON string as opaque input', () => {
     req.body.orderLinesData = '{"productId": 12,"quantity": 10000,"customerReference": ["PO0000001.2", "SM20180105|042"],"couponCode": "pes[Bh.u*t"}'
 
-    b2bOrder()(req, res, next)
+    b2bOrder()(req, res)
 
     expect(challenges.rceChallenge.solved).to.equal(false)
+    expect(res.json.calledOnce).to.equal(true)
+    expect(res.status.called).to.equal(false)
   })
 
-  it('deserializing arbitrary JSON should not solve "rceChallenge"', () => {
+  it('accepts arbitrary JSON text as opaque input', () => {
     req.body.orderLinesData = '{"hello": "world", "foo": 42, "bar": [false, true]}'
 
-    b2bOrder()(req, res, next)
+    b2bOrder()(req, res)
+
     expect(challenges.rceChallenge.solved).to.equal(false)
+    expect(res.json.calledOnce).to.equal(true)
+    expect(res.status.called).to.equal(false)
   })
 
-  it('deserializing broken JSON should not solve "rceChallenge"', () => {
+  it('accepts malformed JSON text without interpreting it', () => {
     req.body.orderLinesData = '{ "productId: 28'
 
-    b2bOrder()(req, res, next)
+    b2bOrder()(req, res)
 
     expect(challenges.rceChallenge.solved).to.equal(false)
+    expect(res.json.calledOnce).to.equal(true)
+    expect(res.status.called).to.equal(false)
   })
+
+  for (const orderLinesData of [null, 42, ' '.repeat(65537)]) {
+    it(`rejects invalid order data of type ${typeof orderLinesData}`, () => {
+      req.body.orderLinesData = orderLinesData
+      b2bOrder()(req, res)
+      expect(res.status).to.have.been.calledWith(400)
+      expect(res.json.firstCall.args[0]).to.have.property('error')
+    })
+  }
+
+  it('accepts a new order when orderLinesData is omitted', () => {
+    b2bOrder()(req, res)
+
+    expect(res.json.calledOnce).to.equal(true)
+    expect(res.status.called).to.equal(false)
+  })
+
+  for (const body of [null, [], 'invalid']) {
+    it(`rejects a request body of type ${typeof body}`, () => {
+      req.body = body
+      b2bOrder()(req, res)
+
+      expect(res.status).to.have.been.calledWith(400)
+      expect(res.json.firstCall.args[0]).to.have.property('error')
+    })
+  }
 })

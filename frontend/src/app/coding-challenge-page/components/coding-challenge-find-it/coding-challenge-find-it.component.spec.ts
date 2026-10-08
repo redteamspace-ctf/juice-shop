@@ -7,7 +7,7 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing'
 import { TranslateModule } from '@ngx-translate/core'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { of } from 'rxjs'
 
 import { CodingChallengeFindItComponent } from './coding-challenge-find-it.component'
@@ -48,7 +48,6 @@ describe('CodingChallengeFindItComponent', () => {
         await TestBed.configureTestingModule({
             imports: [
                 TranslateModule.forRoot(),
-                CookieModule.forRoot(),
                 CodingChallengeFindItComponent
             ],
             providers: [

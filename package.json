@@ -53,7 +53,7 @@
     "build:server": "tsc",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
-    "postinstall": "cd frontend && npm install && cd .. && npm run build:frontend && (npm run --silent build:server || cd .)",
+    "postinstall": "cd frontend && npm ci && cd .. && npm run build:frontend && (npm run --silent build:server || cd .)",
     "lint": "eslint *.ts data lib models routes test/**/*.ts views && cd frontend && npm run lint && npm run lint:scss && cd ..",
     "lint:config": "schema validate -s config.schema.yml",
     "lint:fix": "eslint *.ts data lib models routes test/**/*.ts views rsn --fix && cd frontend && npm run lint:fix && cd ..",
@@ -161,7 +161,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cyclonedx/cyclonedx-npm": "^2.0.0||^3.0.0||^4.00",
+    "@cyclonedx/cyclonedx-npm": "4.2.1",
     "@eslint/js": "^9.33.0",
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@types/chai": "^4.3.20",
@@ -220,7 +220,7 @@
     "socket.io-client": "^3.1.3",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
-    "typescript": "~5.3.3",
+    "typescript": "5.3.3",
     "typescript-eslint": "^8.57.1"
   },
   "engines": {

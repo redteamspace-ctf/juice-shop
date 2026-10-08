@@ -22,7 +22,7 @@ import { AdministrationService } from '../Services/administration.service'
 import { RouterTestingModule } from '@angular/router/testing'
 import { MatMenuModule } from '@angular/material/menu'
 import { MatTooltipModule } from '@angular/material/tooltip'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { SocketIoService } from '../Services/socket-io.service'
 import { of, throwError } from 'rxjs'
 import { MatCardModule } from '@angular/material/card'
@@ -102,7 +102,6 @@ describe('NavbarComponent', () => {
             imports: [RouterTestingModule.withRoutes([
                     { path: 'search', component: SearchResultComponent }
                 ]),
-                CookieModule.forRoot(),
                 TranslateModule.forRoot(),
                 MatToolbarModule,
                 MatIconModule,

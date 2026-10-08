@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import os from 'node:os'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import path from 'node:path'
+import { Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import yaml from 'js-yaml'
 import libxml from 'libxmljs2'
 import unzipper from 'unzipper'
@@ -24,40 +25,47 @@ function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunctio
   }
 }
 
-function handleZipFileUpload ({ file }: Request, res: Response, next: NextFunction) {
-  if (utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
-    if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.fileWriteChallenge)) {
-      const buffer = file.buffer
-      const filename = file.originalname.toLowerCase()
-      const tempFile = path.join(os.tmpdir(), filename)
-      fs.open(tempFile, 'w', function (err, fd) {
-        if (err != null) { next(err) }
-        fs.write(fd, buffer, 0, buffer.length, null, function (err) {
-          if (err != null) { next(err) }
-          fs.close(fd, function () {
-            fs.createReadStream(tempFile)
-              .pipe(unzipper.Parse())
-              .on('entry', function (entry: any) {
-                const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
-                } else {
-                  entry.autodrain()
-                }
-              }).on('error', function (err: unknown) { next(err) })
-          })
-        })
+async function handleZipFileUpload ({ file }: Request, res: Response, next: NextFunction) {
+  if (!utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
+    next()
+    return
+  }
+  if (!file?.buffer) {
+    res.status(400).json({ error: 'Archive data is missing' })
+    return
+  }
+  let uploadRoot: string | undefined
+  try {
+    uploadRoot = await fs.promises.mkdtemp(path.join(path.resolve('uploads/complaints'), 'upload-'))
+    const archive = await unzipper.Open.buffer(file.buffer)
+    if (archive.files.length > 100) throw new Error('Archive has too many entries')
+    let extractedBytes = 0
+    for (const entry of archive.files) {
+      const absolutePath = path.resolve(uploadRoot, entry.path)
+      if (/[\\/]$/.test(entry.path) || !absolutePath.startsWith(uploadRoot + path.sep)) {
+        continue
+      }
+      await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true })
+      const limit = new Transform({
+        transform (chunk, encoding, callback) {
+          extractedBytes += chunk.length
+          if (extractedBytes > 1000000) callback(new Error('Archive expands beyond the upload limit'))
+          else callback(null, chunk)
+        }
       })
+      await pipeline(entry.stream(), limit, fs.createWriteStream(absolutePath, { flags: 'wx' }))
     }
     res.status(204).end()
-  } else {
-    next()
+  } catch (error) {
+    if (uploadRoot) await fs.promises.rm(uploadRoot, { recursive: true, force: true })
+    res.status(400).json({ error: 'Invalid or oversized archive' })
   }
 }
 
 function checkUploadSize ({ file }: Request, res: Response, next: NextFunction) {
+  if (file != null && file.size > 100000) {
+    return res.status(413).json({ error: 'Upload is too large' })
+  }
   if (file != null) {
     challengeUtils.solveIf(challenges.uploadSizeChallenge, () => { return file?.size > 100000 })
   }
@@ -77,10 +85,13 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
+      if (/<!DOCTYPE|<!ENTITY/i.test(data)) {
+        return res.status(400).json({ error: 'XML declarations are not allowed' })
+      }
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nonet: true, nocdata: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

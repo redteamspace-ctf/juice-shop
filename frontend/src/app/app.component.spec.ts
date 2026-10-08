@@ -32,7 +32,6 @@ import { LoginGuard } from './app.guard'
 import { MatInputModule } from '@angular/material/input'
 import { MatSnackBarModule } from '@angular/material/snack-bar'
 import { MatSearchBarComponent } from './mat-search-bar/mat-search-bar.component'
-import { CookieModule } from 'ngy-cookie'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 
 describe('AppComponent', () => {
@@ -42,7 +41,6 @@ describe('AppComponent', () => {
     await TestBed.configureTestingModule({
       imports: [RouterTestingModule,
         MatToolbarModule,
-        CookieModule.forRoot(),
         TranslateModule.forRoot(),
         MatIconModule,
         MatCardModule,

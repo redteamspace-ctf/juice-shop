@@ -60,8 +60,9 @@ const chatTools = {
       id: z.string().describe('The product ID to get reviews for')
     }),
     execute: async ({ id }) => {
-      const productId = Number(Id)
-      return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+      const productId = Number(id)
+      if (!Number.isSafeInteger(productId) || productId < 1) return []
+      return await db.reviewsCollection.find({ product: productId }) as Review[]
     }
   }),
 

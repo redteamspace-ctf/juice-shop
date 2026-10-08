@@ -11,7 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core'
 import { RouterTestingModule } from '@angular/router/testing'
 import { of, throwError } from 'rxjs'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { LoginGuard } from '../app.guard'
 import { SidenavComponent } from './sidenav.component'
 import { MatToolbarModule } from '@angular/material/toolbar'
@@ -90,7 +90,6 @@ describe('SidenavComponent', () => {
                 MatButtonModule,
                 MatMenuModule,
                 MatListModule,
-                CookieModule.forRoot(),
                 RouterTestingModule,
                 SidenavComponent],
             providers: [

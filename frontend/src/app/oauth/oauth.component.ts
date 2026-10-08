@@ -5,7 +5,7 @@
 
 import { ActivatedRoute, Router } from '@angular/router'
 import { UserService } from '../Services/user.service'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { Component, NgZone, type OnInit, inject } from '@angular/core'
 import { TranslateModule } from '@ngx-translate/core'
 import { MatCardModule } from '@angular/material/card'

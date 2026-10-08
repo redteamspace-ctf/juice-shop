@@ -278,9 +278,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAdmin(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAdmin(), serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -339,11 +339,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start resetPasswordMortyChallenge
   /* Rate limiting */
-  app.enable('trust proxy')
+  app.set('trust proxy', 'loopback')
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ ip }: { ip: any }) { return ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -359,14 +359,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.get('/api/Users', security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
-  app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.post('/api/Products', security.isAdmin()) // vuln-code-snippet neutral-line changeProductChallenge
+  app.put('/api/Products/:id', security.isAdmin()) // vuln-code-snippet vuln-line changeProductChallenge
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -391,6 +391,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/SecurityQuestions', security.denyAll())
   app.use('/api/SecurityQuestions/:id', security.denyAll())
   /* SecurityAnswers: Only POST of answer allowed. */
+  app.post('/api/SecurityAnswers', (req: Request, res: Response, next: NextFunction) => {
+    if (typeof req.body.answer !== 'string' || req.body.answer.trim().length < 10) {
+      res.status(400).json({ error: 'Security answers must contain at least 10 characters' })
+      return
+    }
+    next()
+  })
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
@@ -398,18 +405,25 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
-  app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
+  app.post('/api/Feedbacks', rateLimit({ windowMs: 20000, max: 5, validate: false }), verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (typeof req.body.email !== 'string' || typeof req.body.password !== 'string' ||
+        typeof req.body.passwordRepeat !== 'string' || req.body.email.trim() === '' ||
+        req.body.password === '' || req.body.password !== req.body.passwordRepeat) {
+      res.status(400).send('Invalid registration details')
+      return
+    }
+    req.body.role = security.roles.customer
+    req.body.deluxeToken = ''
+    delete req.body.id
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
-        req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
@@ -637,6 +651,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/chat', utils.asyncHandler(chat()))
 
   /* Web3 API endpoints */
+  app.use('/rest/web3', security.isAuthorized())
   app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
   app.get('/rest/web3/nftUnlocked', nftUnlocked())
   app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))

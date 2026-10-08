@@ -17,7 +17,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox'
 import { MatFormFieldModule } from '@angular/material/form-field'
 import { MatCardModule } from '@angular/material/card'
 import { MatInputModule } from '@angular/material/input'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { Location } from '@angular/common'
 import { of, throwError } from 'rxjs'
 import { MatTableModule } from '@angular/material/table'
@@ -50,7 +50,6 @@ describe('LoginComponent', () => {
                     { path: 'search', component: SearchResultComponent }
                 ]),
                 ReactiveFormsModule,
-                CookieModule.forRoot(),
                 TranslateModule.forRoot(),
                 MatCheckboxModule,
                 MatFormFieldModule,

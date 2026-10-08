@@ -3,38 +3,25 @@
  * SPDX-License-Identifier: MIT
  */
 
-import vm from 'node:vm'
-import { type Request, type Response, type NextFunction } from 'express'
-// @ts-expect-error FIXME due to non-existing type definitions for notevil
-import { eval as safeEval } from 'notevil'
-
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
+import { type Request, type Response } from 'express'
 import * as security from '../lib/insecurity'
-import * as utils from '../lib/utils'
 
 export function b2bOrder () {
-  return ({ body }: Request, res: Response, next: NextFunction) => {
-    if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-      const orderLinesData = body.orderLinesData || ''
-      try {
-        const sandbox = { safeEval, orderLinesData }
-        vm.createContext(sandbox)
-        vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
-        res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
-      } catch (err) {
-        if (utils.getErrorMessage(err).match(/Script execution timed out.*/) != null) {
-          challengeUtils.solveIf(challenges.rceOccupyChallenge, () => { return true })
-          res.status(503)
-          next(new Error('Sorry, we are temporarily not available! Please try again later.'))
-        } else {
-          challengeUtils.solveIf(challenges.rceChallenge, () => { return utils.getErrorMessage(err) === 'Infinite loop detected - reached max iterations' })
-          next(err)
-        }
-      }
-    } else {
-      res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
+  return ({ body }: Request, res: Response) => {
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      res.status(400).json({ error: 'Invalid order data' })
+      return
     }
+
+    const orderLinesData = body.orderLinesData
+    if (orderLinesData !== undefined && (typeof orderLinesData !== 'string' || orderLinesData.length > 65536)) {
+      res.status(400).json({ error: 'Invalid order data' })
+      return
+    }
+
+    // This legacy field is opaque input. Never interpret its contents as code
+    // or parse them as JSON; older B2B clients may send serialized data here.
+    res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 
   function uniqueOrderNumber () {

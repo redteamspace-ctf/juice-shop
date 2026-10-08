@@ -1,8 +1,11 @@
 FROM node:24 AS installer
 COPY . /juice-shop
 WORKDIR /juice-shop
-RUN npm install -g typescript@~5.3.3
-RUN npm install --omit=dev --unsafe-perm
+ENV npm_config_fetch_retries=5 \
+    npm_config_fetch_retry_mintimeout=10000 \
+    npm_config_fetch_retry_maxtimeout=60000
+RUN npm install -g typescript@5.3.3
+RUN npm ci --omit=dev --unsafe-perm
 RUN npm dedupe --omit=dev
 RUN rm -rf frontend/node_modules
 RUN rm -rf frontend/.angular
@@ -15,7 +18,7 @@ RUN rm ftp/legal.md || true
 RUN rm i18n/*.json || true
 
 # keep version in sync with package.json
-ARG CYCLONEDX_NPM_VERSION='^2.0.0||^3.0.0||^4.0.0'
+ARG CYCLONEDX_NPM_VERSION='4.2.1'
 RUN npm install -g @cyclonedx/cyclonedx-npm@$CYCLONEDX_NPM_VERSION
 RUN npm run sbom
 

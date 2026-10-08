@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { TranslateModule, TranslateService } from '@ngx-translate/core'
 import { MatButtonModule } from '@angular/material/button'
@@ -58,7 +58,6 @@ describe('ServerStartedNotificationComponent', () => {
 
         TestBed.configureTestingModule({
             imports: [TranslateModule.forRoot(),
-                CookieModule.forRoot(),
                 MatCardModule,
                 MatButtonModule,
                 MatIconModule,

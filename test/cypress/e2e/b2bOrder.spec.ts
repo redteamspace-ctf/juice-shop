@@ -1,63 +1,49 @@
 describe('/b2b/v2/order', () => {
-  describe('challenge "rce"', () => {
-    it('an infinite loop deserialization payload should not bring down the server', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.login({ email: 'admin', password: 'admin123' })
+  it('does not evaluate an infinite-loop payload in orderLinesData', () => {
+    cy.login({ email: 'admin', password: 'admin123' })
 
-          cy.window().then(async () => {
-            const response = await fetch(
-              `${Cypress.config('baseUrl')}/b2b/v2/orders/`,
-              {
-                method: 'POST',
-                cache: 'no-cache',
-                headers: {
-                  'Content-type': 'application/json',
-                  Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                  orderLinesData: '(function dos() { while(true); })()'
-                })
-              }
-            )
-            if (response.status === 500) {
-              console.log('Success')
-            }
-          })
-          cy.expectChallengeSolved({ challenge: 'Blocked RCE DoS' })
-        }
+    cy.window().then(async () => {
+      const start = Date.now()
+      const response = await fetch(`${Cypress.config('baseUrl')}/b2b/v2/orders/`, {
+        method: 'POST',
+        cache: 'no-cache',
+        headers: {
+          'Content-type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ orderLinesData: '(function dos() { while(true); })()' })
       })
+
+      expect(Date.now() - start).to.be.lessThan(1800)
+      expect(response.status).to.equal(200)
+      const body = await response.json()
+      expect(body.orderNo).to.be.a('string')
+      expect(body.paymentDue).to.be.a('string')
     })
   })
 
-  describe('challenge "rceOccupy"', () => {
-    it('should be possible to cause request timeout using a recursive regular expression payload', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.login({ email: 'admin', password: 'admin123' })
-          cy.window().then(async () => {
-            const response = await fetch(
-              `${Cypress.config('baseUrl')}/b2b/v2/orders/`,
-              {
-                method: 'POST',
-                cache: 'no-cache',
-                headers: {
-                  'Content-type': 'application/json',
-                  Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                  orderLinesData:
-                    "/((a+)+)b/.test('aaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
-                })
-              }
-            )
-            if (response.status === 503) {
-              console.log('Success')
-            }
-          })
-          cy.expectChallengeSolved({ challenge: 'Successful RCE DoS' })
-        }
+  it('does not evaluate a pathological regular expression in orderLinesData', () => {
+    cy.login({ email: 'admin', password: 'admin123' })
+
+    cy.window().then(async () => {
+      const start = Date.now()
+      const response = await fetch(`${Cypress.config('baseUrl')}/b2b/v2/orders/`, {
+        method: 'POST',
+        cache: 'no-cache',
+        headers: {
+          'Content-type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          orderLinesData: "/((a+)+)b/.test('aaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
+        })
       })
+
+      expect(Date.now() - start).to.be.lessThan(1800)
+      expect(response.status).to.equal(200)
+      const body = await response.json()
+      expect(body.orderNo).to.be.a('string')
+      expect(body.paymentDue).to.be.a('string')
     })
   })
 })

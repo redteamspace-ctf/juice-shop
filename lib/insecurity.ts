@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -19,8 +17,13 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const signingKeys = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+})
+export const publicKey = signingKeys.publicKey
+const privateKey = signingKeys.privateKey
 
 interface ResponseWithUser {
   status?: string
@@ -38,6 +41,7 @@ interface IAuthenticatedUsers {
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
+  revokeUserSessions: (userId: number) => void
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
@@ -51,11 +55,91 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
-export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const isAuthorized = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  const payload = token && verify(token) && decode(token)
+  if (!payload?.data?.id) {
+    res.status(401).json({ error: 'Authentication required' })
+    return
+  }
+  req.user = payload
+  next()
+}
+export const denyAll = () => (_req: Request, res: Response) => res.status(403).json({ error: 'Access denied' })
+export const authorize = (user: Record<string, any> = {}) => {
+  const payload = { ...user }
+  if (payload.data) {
+    const userData = payload.data as {
+      get?: (options: { plain: boolean }) => unknown
+      toJSON?: () => unknown
+    }
+    const serializedData = typeof userData.get === 'function'
+      ? userData.get({ plain: true })
+      : typeof userData.toJSON === 'function'
+        ? userData.toJSON()
+        : payload.data
+    payload.data = serializedData !== null && typeof serializedData === 'object' && !Array.isArray(serializedData)
+      ? { ...serializedData }
+      : {}
+    delete payload.data.password
+    delete payload.data.totpSecret
+  }
+  return jwt.sign(payload, privateKey, { expiresInMinutes: 360, algorithm: 'RS256' } as any)
+}
+
+const revokedTokens = new Map<string, number>()
+let verificationCount = 0
+
+function purgeExpiredRevocations () {
+  const now = Date.now()
+  for (const [token, expiresAt] of revokedTokens) {
+    if (expiresAt <= now) revokedTokens.delete(token)
+  }
+}
+
+function tokenExpiration (token: string) {
+  try {
+    const payloadPart = token.split('.')[1]
+    const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString())
+    return typeof payload.exp === 'number' && Number.isFinite(payload.exp)
+      ? payload.exp * 1000
+      : Date.now() + 360 * 60 * 1000
+  } catch {
+    return Date.now() + 360 * 60 * 1000
+  }
+}
+
+export const verify = (token: string) => {
+  try {
+    if (++verificationCount % 256 === 0) {
+      purgeExpiredRevocations()
+    }
+    if (typeof token !== 'string' || token.length > 16384) return false
+    const revokedUntil = revokedTokens.get(token)
+    if (revokedUntil !== undefined) {
+      if (revokedUntil > Date.now()) return false
+      revokedTokens.delete(token)
+    }
+    const parts = token.split('.')
+    if (parts.length !== 3) return false
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString())
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString())
+    return header.alg === 'RS256' && typeof payload.exp === 'number' && payload.exp > Date.now() / 1000 &&
+      crypto.verify('RSA-SHA256', Buffer.from(parts[0] + '.' + parts[1]), publicKey, Buffer.from(parts[2], 'base64url'))
+  } catch {
+    return false
+  }
+}
+export const decode = (token: string) => { return verify(token) ? jws.decode(token)?.payload : undefined }
+
+export const isAdmin = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  if (token && decode(token)?.data?.role === roles.admin) {
+    next()
+  } else {
+    res.status(403).json({ error: 'Administrator access required' })
+  }
+}
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -73,11 +157,12 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
   put: function (token: string, user: ResponseWithUser) {
+    if (revokedTokens.has(token)) return
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    return token && verify(utils.unquote(token)) ? this.tokenMap[utils.unquote(token)] : undefined
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -89,6 +174,15 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
     this.put(token, user)
+  },
+  revokeUserSessions: function (userId: number) {
+    for (const [token, user] of Object.entries(this.tokenMap)) {
+      if (user.data.id !== userId) continue
+      const expiresAt = tokenExpiration(token)
+      if (expiresAt > Date.now()) revokedTokens.set(token, expiresAt)
+      delete this.tokenMap[token]
+      if (this.idMap[userId] === token) delete this.idMap[userId]
+    }
   }
 }
 
@@ -123,9 +217,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -133,11 +224,14 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+  if (typeof url !== 'string') return false
+  try {
+    const target = new URL(url)
+    if (target.username !== '' || target.password !== '') return false
+    return [...redirectAllowlist].some(allowedUrl => target.href === new URL(allowedUrl).href)
+  } catch {
+    return false
   }
-  return allowed
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -187,15 +281,12 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null) {
-        if (authenticatedUsers.get(token) === undefined) {
-          authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
-        }
-      }
-    })
+  if (token && verify(token)) {
+    const payload = decode(token)
+    if (payload?.data?.id && authenticatedUsers.get(token) === undefined) {
+      authenticatedUsers.put(token, payload)
+      res.cookie('token', token, { sameSite: 'lax' })
+    }
   }
   next()
 }

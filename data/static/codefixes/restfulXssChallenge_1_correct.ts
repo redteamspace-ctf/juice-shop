@@ -5,6 +5,7 @@ ngAfterViewInit () {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
+        this.trustProductDescription(products)
         for (const product of products) {
           dataTable.push({
             name: product.name,
@@ -38,4 +39,10 @@ ngAfterViewInit () {
       },
       error: (err) => { console.log(err) }
     })
+  }
+
+  trustProductDescription (tableData: any[]) {
+    for (let i = 0; i < tableData.length; i++) {
+      tableData[i].description = this.sanitizer.sanitize(SecurityContext.HTML, tableData[i].description)
+    }
   }

@@ -6,7 +6,7 @@
 import { MatButtonModule } from '@angular/material/button'
 import { MatCardModule } from '@angular/material/card'
 import { CountryMappingService } from '../Services/country-mapping.service'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 import { TranslateModule, TranslateService } from '@ngx-translate/core'
 import { ChallengeService } from '../Services/challenge.service'
 import { ConfigurationService } from '../Services/configuration.service'
@@ -79,7 +79,6 @@ describe('ChallengeSolvedNotificationComponent', () => {
 
         TestBed.configureTestingModule({
             imports: [TranslateModule.forRoot(),
-                CookieModule.forRoot(),
                 MatCardModule,
                 MatButtonModule,
                 MatIconModule,

@@ -7,13 +7,13 @@
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.get('/api/Users', security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */
-  app.post('/api/Products', security.isAuthorized())
+  app.post('/api/Products', security.isAdmin())
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())

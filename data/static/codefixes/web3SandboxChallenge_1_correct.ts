@@ -157,7 +157,13 @@ const routes: Routes = [
   },
   {
     path: 'wallet-web3',
+    canActivate: [LoginGuard],
     loadChildren: async () => await loadWeb3WalletModule()
+  },
+  {
+    path: 'web3-sandbox',
+    canActivate: [LoginGuard],
+    loadChildren: async () => await loadWeb3SandboxModule()
   },
   {
     path: 'chatbot',
@@ -178,6 +184,7 @@ const routes: Routes = [
   },
   {
     matcher: tokenMatcher,
+    canActivate: [LoginGuard],
     component: TokenSaleComponent
   },
   {

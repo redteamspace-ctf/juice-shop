@@ -15,7 +15,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { RouterTestingModule } from '@angular/router/testing'
 
 import { TranslateModule } from '@ngx-translate/core'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieService } from 'src/app/Services/cookie.service'
 
 import { MatCardModule } from '@angular/material/card'
 import { MatFormFieldModule } from '@angular/material/form-field'
@@ -61,7 +61,6 @@ describe('TwoFactorAuthEnterComponent', () => {
                     { path: 'search', component: SearchResultComponent }
                 ]),
                 ReactiveFormsModule,
-                CookieModule.forRoot(),
                 TranslateModule.forRoot(),
                 MatCheckboxModule,
                 MatFormFieldModule,
