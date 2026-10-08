@@ -52,7 +52,8 @@ export const promotionVideo = () => {
     fs.readFile('views/promotionVideo.pug', async function (err, buf) {
       if (err != null) throw err
       let template = buf.toString()
-      const subs = getSubsFromFile()
+      // Subtitles are embedded as data: any markup is neutralised before they reach the page
+      const subs = getSubsFromFile().replace(/<\/?script/gi, '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
       challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
 

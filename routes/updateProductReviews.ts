@@ -13,11 +13,19 @@ import * as db from '../data/mongodb'
 // vuln-code-snippet start noSqlReviewsChallenge forgedReviewChallenge
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    const user = security.authenticatedUsers.from(req) // vuln-code-snippet vuln-line forgedReviewChallenge
-    db.reviewsCollection.update( // vuln-code-snippet neutral-line forgedReviewChallenge
-      { _id: req.body.id }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
+    const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    if (typeof req.body.id !== 'string' || typeof req.body.message !== 'string') {
+      res.status(400).json({ error: 'Invalid review update' })
+      return
+    }
+    db.reviewsCollection.update(
+      { _id: req.body.id, author: user.data.email }, // only the author's own review, by exact id
       { $set: { message: req.body.message } },
-      { multi: true } // vuln-code-snippet vuln-line noSqlReviewsChallenge
+      { multi: false }
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         challengeUtils.solveIf(challenges.noSqlReviewsChallenge, () => { return result.modified > 1 }) // vuln-code-snippet hide-line
