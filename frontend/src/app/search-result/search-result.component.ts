@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/prefer-for-of */
 import { ActivatedRoute, Router } from '@angular/router'
 import { ProductService } from '../Services/product.service'
-import { type AfterViewInit, Component, NgZone, type OnDestroy, ViewChild, ChangeDetectorRef, ElementRef, inject } from '@angular/core'
+import { type AfterViewInit, Component, NgZone, type OnDestroy, ViewChild, ChangeDetectorRef, ElementRef, inject, SecurityContext } from '@angular/core'
 import { MatPaginator } from '@angular/material/paginator'
 import { BehaviorSubject, forkJoin, type Subscription } from 'rxjs'
 import { MatTableDataSource } from '@angular/material/table'
@@ -107,7 +107,7 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
 
   trustProductDescription (tableData: any[]) { // vuln-code-snippet neutral-line restfulXssChallenge
     for (let i = 0; i < tableData.length; i++) { // vuln-code-snippet neutral-line restfulXssChallenge
-      tableData[i].description = this.sanitizer.bypassSecurityTrustHtml(tableData[i].description) // vuln-code-snippet vuln-line restfulXssChallenge
+      tableData[i].description = this.sanitizer.sanitize(SecurityContext.HTML, tableData[i].description) ?? '' // vuln-code-snippet vuln-line restfulXssChallenge
     } // vuln-code-snippet neutral-line restfulXssChallenge
   } // vuln-code-snippet neutral-line restfulXssChallenge
 

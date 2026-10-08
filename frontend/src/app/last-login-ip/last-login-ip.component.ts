@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Component, inject, OnInit } from '@angular/core'
-import { DomSanitizer } from '@angular/platform-browser'
+import { Component, OnInit } from '@angular/core'
 import { jwtDecode } from 'jwt-decode'
 import { TranslateModule } from '@ngx-translate/core'
 import { MatCardModule } from '@angular/material/card'
@@ -17,7 +16,6 @@ import { MatCardModule } from '@angular/material/card'
 })
 
 export class LastLoginIpComponent implements OnInit {
-  private readonly sanitizer = inject(DomSanitizer)
 
   lastLoginIp: any = '?'
 
@@ -36,7 +34,7 @@ export class LastLoginIpComponent implements OnInit {
       payload = jwtDecode(token)
       if (payload.data.lastLoginIp) {
 
-        this.lastLoginIp = this.sanitizer.bypassSecurityTrustHtml(`<small>${payload.data.lastLoginIp}</small>`)
+        this.lastLoginIp = payload.data.lastLoginIp
       }
     }
   }

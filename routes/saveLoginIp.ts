@@ -4,6 +4,7 @@
  */
 
 import { type Request, type Response, type NextFunction } from 'express'
+import { isIP } from 'node:net'
 
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
@@ -21,10 +22,8 @@ export function saveLoginIp () {
       }
       if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
         challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
       }
-      if (lastLoginIp === undefined) {
+      if (typeof lastLoginIp !== 'string' || isIP(lastLoginIp) === 0) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
       try {
