@@ -31,6 +31,11 @@ export function resetPassword () {
       res.status(401).send(res.__('New and repeated password do not match.'))
       return
     }
+    const weakPasswordError = security.getWeakPasswordError(newPassword)
+    if (weakPasswordError) {
+      res.status(401).send(weakPasswordError)
+      return
+    }
     try {
       const data = await SecurityAnswerModel.findOne({
         include: [{

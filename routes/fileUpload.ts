@@ -39,10 +39,16 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
+                const uploadDir = path.resolve('uploads/complaints') + path.sep
                 const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                // Zip Slip: an entry path like '../../ftp/legal.md' resolves
+                // outside uploads/complaints but still "includes" the
+                // project root as a substring, so that check let a crafted
+                // zip overwrite arbitrary files anywhere under the repo.
+                // The resolved path must actually start with the intended
+                // upload directory.
+                if (absolutePath.startsWith(uploadDir)) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -80,7 +86,13 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        // noent: false is the actual XXE fix — it stops libxml2 from
+        // substituting entities at all, which is what lets a crafted
+        // <!ENTITY xxe SYSTEM "file:///etc/passwd"> read local files (or a
+        // nested/recursive entity definition blow up into a DoS). nonet
+        // additionally blocks any entity that would resolve over the
+        // network.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

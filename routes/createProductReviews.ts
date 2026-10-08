@@ -23,7 +23,10 @@ export function createProductReviews () {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        // The author must always be the authenticated user, never a
+        // client-supplied value — otherwise anyone can post a review that
+        // impersonates someone else.
+        author: user?.data?.email,
         likesCount: 0,
         likedBy: []
       })

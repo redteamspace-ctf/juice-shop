@@ -78,8 +78,7 @@ const metricToolCalls = new Counter({
   labelNames: ['tool'],
 })
 
-// vuln-code-snippet start chatbotGreedyInjectionChallenge
-function buildSystemPrompt (userName?: string) { // vuln-code-snippet neutral-line chatbotGreedyInjectionChallenge
+function buildSystemPrompt (userName?: string) {
   const userIdentifier = userName ? `\nThe customer you are currently chatting with is ${userName}.` : ''
   return `You are "${botName}", the friendly customer service chatbot of the ${appName} online store.
 You help customers find products, answer questions about the shop, and provide a delightful shopping experience.
@@ -170,20 +169,31 @@ export function chat () {
         }
       }),
 
-      // vuln-code-snippet start chatbotPromptInjectionChallenge
       generateCoupon: tool({
-        description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+        description: 'Generate a discount coupon for a customer, tied to one of their own orders. Requires a valid order ID belonging to the customer.',
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          // Hard upper bound enforced by the schema itself — the system
+          // prompt's "maximum 10" instruction is only advisory to the LLM
+          // and can be overridden by prompt injection; this cannot.
+          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'),
+          orderId: z.string().describe('The order ID the coupon is being issued for (format: xxxx-xxxxxxxxxxxxxxxx)')
         }),
-        execute: async ({ discount }) => {
-          challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
-          challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
-          const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
-          return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
+        execute: async ({ discount, orderId }) => {
+          // Never take the LLM's (or an injected prompt's) word for it that a
+          // coupon is justified — verify the order actually exists and
+          // belongs to the authenticated customer before issuing anything.
+          const userId = await getUserId(req)
+          if (!userId) return { error: 'Customer not authenticated' }
+          const user = await UserModel.findByPk(userId, { attributes: ['email'] })
+          if (!user) return { error: 'Customer not found' }
+          const maskedEmail = user.email ? user.email.replace(/[aeiou]/gi, '*') : undefined
+          const order = await db.ordersCollection.findOne({ orderId, email: maskedEmail })
+          if (!order) return { error: 'No order found for this customer with that order ID. A coupon can only be generated against a real order you own.' }
+          const couponCode = security.generateCoupon(discount)
+          return { couponCode, discount }
         }
       })
-    } // vuln-code-snippet end chatbotGreedyInjectionChallenge chatbotPromptInjectionChallenge
+    }
 
     const model = config.get<string>('application.chatBot.model')
     const messages = req.body?.messages ?? []

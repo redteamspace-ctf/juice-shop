@@ -49,7 +49,11 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // Require a captcha to actually exist AND its answer to match. The
+    // original `!captchas[0] || ...` let a request through whenever no
+    // captcha was on record — submit without ever requesting one (or after
+    // it expired) and the check was bypassed entirely.
+    if (captchas[0] && req.body.answer === captchas[0].answer) {
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

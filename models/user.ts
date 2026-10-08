@@ -13,9 +13,6 @@ import {
   type CreationOptional,
   type Sequelize
 } from 'sequelize'
-import * as challengeUtils from '../lib/challengeUtils'
-import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 class User extends Model<
@@ -46,11 +43,9 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
+          // sanitizeLegacy is a crude regex strip with known bypasses —
+          // always use the real sanitizer, never the weak one.
+          username = security.sanitizeSecure(username)
           this.setDataValue('username', username)
         }
       },
@@ -58,19 +53,12 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
+          // Previously stored completely unsanitized — persisted XSS
+          // anywhere email is later rendered.
+          email = security.sanitizeSecure(email)
           this.setDataValue('email', email)
         }
-      }, // vuln-code-snippet hide-end
+      },
       password: {
         type: DataTypes.STRING,
         set (clearTextPassword: string) {

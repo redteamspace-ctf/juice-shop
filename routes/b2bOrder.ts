@@ -3,38 +3,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import vm from 'node:vm'
 import { type Request, type Response, type NextFunction } from 'express'
-// @ts-expect-error FIXME due to non-existing type definitions for notevil
-import { eval as safeEval } from 'notevil'
 
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
-import * as utils from '../lib/utils'
 
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
-    if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-      const orderLinesData = body.orderLinesData || ''
-      try {
-        const sandbox = { safeEval, orderLinesData }
-        vm.createContext(sandbox)
-        vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
-        res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
-      } catch (err) {
-        if (utils.getErrorMessage(err).match(/Script execution timed out.*/) != null) {
-          challengeUtils.solveIf(challenges.rceOccupyChallenge, () => { return true })
-          res.status(503)
-          next(new Error('Sorry, we are temporarily not available! Please try again later.'))
-        } else {
-          challengeUtils.solveIf(challenges.rceChallenge, () => { return utils.getErrorMessage(err) === 'Infinite loop detected - reached max iterations' })
-          next(err)
-        }
-      }
-    } else {
-      res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
-    }
+    // orderLinesData was previously run through a "sandboxed" eval
+    // (notevil, inside a vm context) — arbitrary code execution as a
+    // feature, which is exactly what rceChallenge/rceOccupyChallenge
+    // exploit (sandbox breakout, and an infinite loop/ReDoS that hangs the
+    // request past the vm timeout). Its result was never even used in the
+    // response below, so there was no legitimate business logic requiring
+    // code execution here in the first place — orderLinesData is accepted
+    // as opaque data only.
+    res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 
   function uniqueOrderNumber () {

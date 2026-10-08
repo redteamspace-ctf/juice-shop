@@ -36,6 +36,10 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // A CAPTCHA must only ever be usable once — delete it immediately so
+      // the same captchaId/answer pair can't be replayed to blow through a
+      // rate limit (e.g. submitting 10+ feedbacks in seconds).
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

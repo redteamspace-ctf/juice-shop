@@ -68,7 +68,11 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
+      // Subtitles are file content injected into a <script> block — escape
+      // any sequence that could close that element (or open an HTML comment)
+      // so subtitle content can't break out and inject active markup.
+      const safeSubs = subs.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', () => '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + safeSubs + '</script>')
       res.send(compiledTemplate)
     })
   }

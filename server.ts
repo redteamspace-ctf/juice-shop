@@ -265,9 +265,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* /ftp file download only — directory browsing disabled (no index listing) */
+  app.use('/ftp(?!/quarantine)/:file', servePublicFiles())
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
@@ -277,10 +276,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
-  app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* /support/logs: access logs are for administrators only. Gate the whole
+     path behind an admin check first, then keep the existing log browsing /
+     download handlers (and the challenge-detection middleware) intact —
+     a non-admin is rejected before ever reaching them. */
+  app.use('/support/logs', security.isAdmin())
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
+  app.use('/support/logs', verify.accessControlChallenges())
+  app.use('/support/logs/:file', serveLogFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -339,11 +342,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start resetPasswordMortyChallenge
   /* Rate limiting */
-  app.enable('trust proxy')
+  // Deliberately NOT app.enable('trust proxy'): this app is reached
+  // directly, with no reverse proxy in front of it, and trusting it
+  // unconditionally means Express takes req.ip straight from the
+  // client-supplied X-Forwarded-For header — exactly as spoofable per
+  // request as reading the header by hand was. With trust proxy left at
+  // its default (false), req.ip is the real socket address and cannot be
+  // rotated by the client, which is what every IP-keyed rate limiter in
+  // this file (here and on /api/Feedbacks) actually depends on to work.
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 100
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -358,15 +367,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Deleting other customers' feedback is an admin-panel action only — any
+     authenticated user could otherwise delete anyone's feedback */
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
+  /* Users: Only POST is allowed in order to register a new user. Listing
+     every user's record is an administrator action, not something any
+     logged-in customer should be able to do. */
+  app.get('/api/Users', security.isAdmin())
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
-  app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.post('/api/Products', security.denyAll())
+  app.put('/api/Products/:id', security.denyAll())
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -394,9 +408,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  /* This returns every user's full record (admin panel user management) —
+     admin-only, not just "logged in" */
+  app.use('/rest/user/authentication-details', security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Rate limit feedback submissions — a CAPTCHA that's trivial arithmetic
+     and solved once per submission is not a rate limit by itself; nothing
+     previously stopped an automated client from fetching+solving+posting
+     well over 10 of these within 20 seconds. */
+  app.post('/api/Feedbacks', rateLimit({ windowMs: 20 * 1000, max: 5 }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
@@ -413,6 +434,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
+    }
+    next()
+  })
+  /* Mass assignment protection: role is never settable by the client — the
+     auto-generated /api/Users create endpoint would otherwise persist
+     whatever `role` is sent in the body, letting anyone self-register as
+     admin */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    delete req.body.role
+    next()
+  })
+  /* Weak password protection: reject registrations with a password that is
+     too short or appears on common/breached password lists (NIST SP 800-63B) */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    const weakPasswordError = security.getWeakPasswordError(req.body.password)
+    if (weakPasswordError) {
+      res.status(400).send(weakPasswordError)
+      return
     }
     next()
   })
@@ -507,13 +546,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
     // create a wallet when a new user is registered using API
     if (name === 'User') { // vuln-code-snippet neutral-line registerAdminChallenge
-      resource.create.send.before((req: Request, res: Response, context: { instance: { id: any }, continue: any }) => { // vuln-code-snippet vuln-line registerAdminChallenge
+      resource.create.send.before((req: Request, res: Response, context: { instance: { id: any, role: any }, continue: any }) => {
         WalletModel.create({ UserId: context.instance.id }).catch((err: unknown) => {
           console.log(err)
         })
-        return context.continue // vuln-code-snippet neutral-line registerAdminChallenge
-      }) // vuln-code-snippet neutral-line registerAdminChallenge
-    } // vuln-code-snippet neutral-line registerAdminChallenge
+        // Mass assignment hardening: role can never be attacker-controlled,
+        // even as a defense-in-depth backstop alongside stripping it from
+        // req.body earlier in the pipeline.
+        context.instance.role = 'customer'
+        return context.continue
+      })
+    }
     // vuln-code-snippet end registerAdminChallenge
 
     // translate challenge descriptions on-the-fly
@@ -639,9 +682,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Web3 API endpoints */
   app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
   app.get('/rest/web3/nftUnlocked', nftUnlocked())
-  app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))
-  app.post('/rest/web3/walletNFTVerify', walletNFTVerify())
-  app.post('/rest/web3/walletExploitAddress', utils.asyncHandler(contractExploitListener()))
+  app.get('/rest/web3/nftMintListen', security.isAuthorized(), utils.asyncHandler(nftMintListener()))
+  app.post('/rest/web3/walletNFTVerify', security.isAuthorized(), walletNFTVerify())
+  app.post('/rest/web3/walletExploitAddress', security.isAuthorized(), utils.asyncHandler(contractExploitListener()))
 
   /* B2B Order API */
   app.post('/b2b/v2/orders', b2bOrder())
@@ -722,7 +765,7 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics()))
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

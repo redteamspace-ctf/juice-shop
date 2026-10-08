@@ -13,6 +13,7 @@ import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
 import sanitizeFilenameLib from 'sanitize-filename'
 import * as utils from './utils'
+import { isCommonPassword } from '../data/static/commonPasswords'
 
 /* jslint node: true */
 
@@ -43,6 +44,21 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+// Password strength policy (NIST SP 800-63B: length over complexity rules,
+// and reject passwords known from breach corpora). Applied only at the
+// entry points where a HUMAN actively chooses a new password — registration,
+// change-password, reset-password — never to the model layer itself, which
+// is also used to seed the app's fixed demo/test accounts at startup.
+export const getWeakPasswordError = (password: string): string | null => {
+  if (!password || password.length < 10) {
+    return 'Password must be at least 10 characters long.'
+  }
+  if (isCommonPassword(password)) {
+    return 'This password is too common and appears in known password breach lists.'
+  }
+  return null
+}
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
@@ -53,7 +69,24 @@ export const cutOffPoisonNullByte = (str: string) => {
 
 export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
+export const authorize = (user: any = {}) => {
+  // The JWT payload is only signed, never encrypted — anyone holding the
+  // token can base64-decode and read it. Sign a copy with the password hash
+  // and TOTP secret stripped out so a leaked/decoded token never exposes
+  // them, without touching the caller's own object (e.g. login.ts keeps the
+  // full record server-side via authenticatedUsers.put right after this).
+  let payload = user
+  if (user && typeof user === 'object' && user.data && typeof user.data === 'object') {
+    // user.data is frequently a raw Sequelize model instance (not a plain
+    // object) with the real fields nested under dataValues/_previousDataValues
+    // rather than as own properties — .get({ plain: true }) is Sequelize's
+    // own way to flatten that down to a clean plain object first.
+    const rawData = typeof user.data.get === 'function' ? user.data.get({ plain: true }) : user.data
+    const { password, totpSecret, ...safeData } = rawData
+    payload = { ...user, data: safeData }
+  }
+  return jwt.sign(payload, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
+}
 export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
@@ -123,9 +156,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +165,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
@@ -157,6 +187,17 @@ export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
     if (decodedToken?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })

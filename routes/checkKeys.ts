@@ -7,7 +7,14 @@ export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
       const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
+      // The wallet seed phrase must never be hard-coded in source (it was
+      // also leaked in a seeded user's feedback) — read it from the
+      // environment instead, and refuse the operation when it isn't set.
+      const mnemonic = process.env.NFT_WALLET_MNEMONIC
+      if (!mnemonic) {
+        res.status(503).json({ success: false, message: 'NFT wallet is not configured', status: challenges.nftUnlockChallenge })
+        return
+      }
       const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
       const privateKey = mnemonicWallet.privateKey
       const publicKey = mnemonicWallet.publicKey
