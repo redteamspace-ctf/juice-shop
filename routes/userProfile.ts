@@ -21,6 +21,19 @@ function favicon () {
   return utils.extractFilename(config.get('application.favicon'))
 }
 
+function imageOrigin (profileImage?: string): string {
+  if (typeof profileImage !== 'string') return ''
+  try {
+    const url = new URL(profileImage)
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return url.origin
+    }
+  } catch {
+    // relative (local) image paths are already covered by 'self'
+  }
+  return ''
+}
+
 export function getUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     let template: string
@@ -49,29 +62,13 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
-      username = '\\' + username
-    }
+    // The username is user-controlled data: it is never evaluated and never spliced
+    // into the Pug template source. It is passed to Pug as a local and HTML-escaped there.
+    const username: string = user.username ?? ''
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -85,7 +82,10 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      // Only the validated origin of an external profile image is added to the CSP, so a
+      // crafted image URL can no longer inject additional CSP directives.
+      const imageSource = imageOrigin(user?.profileImage)
+      const CSP = `img-src 'self'${imageSource ? ' ' + imageSource : ''}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
@@ -95,7 +95,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn({ username, email: user.email, profileImage: user.profileImage }))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

@@ -13,6 +13,8 @@ import { challenges, users } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 
+const MIN_SECURITY_ANSWER_LENGTH = 10
+
 export function resetPassword () {
   return async ({ body, connection }: Request, res: Response, next: NextFunction) => {
     const email = body.email
@@ -29,6 +31,12 @@ export function resetPassword () {
     }
     if (newPassword !== repeatPassword) {
       res.status(401).send(res.__('New and repeated password do not match.'))
+      return
+    }
+    // Short answers (e.g. pet names) are trivially guessable via OSINT or brute force,
+    // so they are not accepted as the sole factor for a password reset.
+    if (typeof answer !== 'string' || answer.length < MIN_SECURITY_ANSWER_LENGTH) {
+      res.status(401).send(res.__('Wrong answer to security question.'))
       return
     }
     try {

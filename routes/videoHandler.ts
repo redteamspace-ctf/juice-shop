@@ -68,7 +68,10 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
+      // the subtitles are embedded as raw text inside a <script> element, so any "</script"
+      // sequence must be neutralised to prevent breaking out of it (XSS)
+      const safeSubs = subs.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', () => '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + safeSubs + '</script>')
       res.send(compiledTemplate)
     })
   }

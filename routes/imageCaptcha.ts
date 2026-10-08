@@ -39,6 +39,10 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
   try {
     const user = security.authenticatedUsers.from(req)
     const UserId = user ? user.data ? user.data.id : undefined : undefined
+    if (UserId === undefined) {
+      res.status(401).send(res.__('You need to be logged in to request a CAPTCHA.'))
+      return
+    }
     const captchas = await ImageCaptchaModel.findAll({
       limit: 1,
       where: {
@@ -49,7 +53,9 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // A solved CAPTCHA is mandatory: requests without a previously issued CAPTCHA are rejected
+    if (captchas[0] && typeof req.body.answer === 'string' && req.body.answer === captchas[0].answer) {
+      await captchas[0].destroy() // one-time use
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

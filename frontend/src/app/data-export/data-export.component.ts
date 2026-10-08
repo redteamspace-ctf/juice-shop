@@ -44,12 +44,9 @@ export class DataExportComponent implements OnInit {
   }
 
   needCaptcha () {
-    const nowTime = new Date()
-    const timeOfCaptcha = localStorage.getItem('lstdtxprt') ? new Date(JSON.parse(String(localStorage.getItem('lstdtxprt')))) : new Date(0)
-    if (nowTime.getTime() - timeOfCaptcha.getTime() < 300000) {
-      this.getNewCaptcha()
-      this.presenceOfCaptcha = true
-    }
+    // The server always requires a solved image CAPTCHA for data exports
+    this.getNewCaptcha()
+    this.presenceOfCaptcha = true
   }
 
   getNewCaptcha () {
@@ -78,6 +75,7 @@ export class DataExportComponent implements OnInit {
         this.error = error.error
         this.confirmation = null
         this.resetFormError()
+        this.getNewCaptcha()
       }
     })
   }
