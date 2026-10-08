@@ -236,9 +236,10 @@ const routes: Routes = [
     loadChildren: async () => await loadWeb3WalletModule()
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+    path: 'web3-sandbox',
+    loadChildren: async () => await loadWeb3SandboxModule(),
+    canActivate: [AdminGuard]
+  },
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -258,9 +259,10 @@ const routes: Routes = [
     component: OAuthComponent
   },
   { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
-  }, // vuln-code-snippet neutral-line tokenSaleChallenge
+    matcher: tokenMatcher,
+    component: TokenSaleComponent,
+    canActivate: [AdminGuard]
+  },
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()

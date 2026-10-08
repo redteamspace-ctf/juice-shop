@@ -14,6 +14,14 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    if (typeof req.body.message !== 'string') {
+      return res.status(400).json({ error: 'Invalid review' })
+    }
+    // The author is always the authenticated user, never taken from the request body
+    req.body.author = user.data.email
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
       () => user?.data?.email !== req.body.author

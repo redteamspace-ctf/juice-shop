@@ -24,6 +24,11 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
+    if (file && (file.includes('\0') || file.includes('%00') || file.includes('..'))) {
+      res.status(403)
+      next(new Error('Invalid file name!'))
+      return
+    }
     if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
       file = security.cutOffPoisonNullByte(file)
 

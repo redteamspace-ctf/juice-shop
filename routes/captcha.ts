@@ -35,7 +35,8 @@ export function captchas () {
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
-    if ((captcha != null) && req.body.captcha === captcha.answer) {
+    if ((captcha != null) && String(req.body.captcha) === captcha.answer) {
+      await captcha.destroy() // a CAPTCHA can only be used once
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

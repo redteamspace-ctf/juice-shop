@@ -49,7 +49,8 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    if (captchas[0] && typeof req.body.answer === 'string' && req.body.answer === captchas[0].answer) {
+      await captchas[0].destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

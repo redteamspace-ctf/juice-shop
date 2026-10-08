@@ -167,6 +167,25 @@ void collectDurationPromise('validatePreconditions', validatePreconditions)()
 void collectDurationPromise('cleanupFtpFolder', cleanupFtpFolder)()
 void collectDurationPromise('validateConfig', validateConfig)({})
 
+// Sliding-window throttle for feedback submissions: at most 5 per client every 20 seconds
+function feedbackSubmissionThrottle () {
+  const windowMs = 20000
+  const maxRequests = 5
+  const history = new Map<string, number[]>()
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    const key = req.ip ?? req.socket.remoteAddress ?? 'unknown'
+    const recent = (history.get(key) ?? []).filter(t => now - t < windowMs)
+    if (recent.length >= maxRequests) {
+      res.status(429).json({ error: 'Too many feedback submissions, please try again later.' })
+      return
+    }
+    recent.push(now)
+    history.set(key, recent)
+    next()
+  }
+}
+
 function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Locals */
   app.locals.captchaId = 0
@@ -278,9 +297,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAdmin()) // access logs are for administrators only
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAdmin(), serveLogFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -359,7 +379,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.get('/api/Users', security.isAdmin())
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
@@ -398,6 +418,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
+  app.post('/api/Feedbacks', feedbackSubmissionThrottle())
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
@@ -410,6 +431,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
+        // Self-registration always creates a customer account; the role can never be chosen by the client
+        req.body.role = security.roles.customer
+        delete req.body.deluxeToken
+        delete req.body.id
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
@@ -637,6 +662,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/chat', utils.asyncHandler(chat()))
 
   /* Web3 API endpoints */
+  app.use('/rest/web3', security.isAuthorized())
   app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
   app.get('/rest/web3/nftUnlocked', nftUnlocked())
   app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))

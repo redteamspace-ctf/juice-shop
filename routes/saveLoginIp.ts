@@ -19,11 +19,12 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
-        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
+      // Only a syntactically valid IP address is accepted from the header; anything else falls back to the socket address
+      if (typeof lastLoginIp !== 'string' || !/^[0-9a-fA-F:.]{2,45}$/.test(lastLoginIp)) {
+        lastLoginIp = undefined
       }
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      lastLoginIp = lastLoginIp !== undefined ? security.sanitizeSecure(lastLoginIp) : undefined
       if (lastLoginIp === undefined) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
