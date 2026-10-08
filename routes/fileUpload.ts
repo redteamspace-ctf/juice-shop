@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import os from 'node:os'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import path from 'node:path'
+import { Readable } from 'node:stream'
 import yaml from 'js-yaml'
 import libxml from 'libxmljs2'
 import unzipper from 'unzipper'
@@ -27,29 +27,20 @@ function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunctio
 function handleZipFileUpload ({ file }: Request, res: Response, next: NextFunction) {
   if (utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.fileWriteChallenge)) {
-      const buffer = file.buffer
-      const filename = file.originalname.toLowerCase()
-      const tempFile = path.join(os.tmpdir(), filename)
-      fs.open(tempFile, 'w', function (err, fd) {
-        if (err != null) { next(err) }
-        fs.write(fd, buffer, 0, buffer.length, null, function (err) {
-          if (err != null) { next(err) }
-          fs.close(fd, function () {
-            fs.createReadStream(tempFile)
-              .pipe(unzipper.Parse())
-              .on('entry', function (entry: any) {
-                const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
-                } else {
-                  entry.autodrain()
-                }
-              }).on('error', function (err: unknown) { next(err) })
-          })
-        })
-      })
+      Readable.from([file.buffer])
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry: any) {
+          const fileName = entry.path
+          const uploadRoot = path.resolve('uploads/complaints')
+          const absolutePath = path.resolve(uploadRoot, fileName)
+          const relativePath = path.relative(uploadRoot, absolutePath)
+          if (entry.type !== 'File' || !relativePath || relativePath === '..' || relativePath.startsWith('..' + path.sep) || path.isAbsolute(relativePath)) {
+            entry.autodrain()
+            return
+          }
+          challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
+          entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
+        }).on('error', function (err: unknown) { next(err) })
     }
     res.status(204).end()
   } else {
@@ -78,9 +69,14 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
       try {
+        if (/<!DOCTYPE\b/i.test(data)) {
+          res.status(410)
+          next(new Error('B2B customer complaints via file upload have been deprecated for security reasons (' + file.originalname + ')'))
+          return
+        }
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nocdata: true, noent: false, dtdload: false, nonet: true, huge: false })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
