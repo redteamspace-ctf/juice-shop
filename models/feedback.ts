@@ -40,19 +40,9 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
-          if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
-            challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
-              return utils.contains(
-                sanitizedComment,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
-          }
-          this.setDataValue('comment', sanitizedComment)
+          // a single sanitize-html pass can be bypassed with nested tags
+          // (e.g. "<<script>x</script>iframe ..."), so sanitize recursively until stable
+          this.setDataValue('comment', typeof comment === 'string' ? security.sanitizeSecure(comment) : comment)
         }
       },
       rating: {

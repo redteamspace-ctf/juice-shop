@@ -5,6 +5,7 @@
 
 import os from 'node:os'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import vm from 'node:vm'
 import path from 'node:path'
 import yaml from 'js-yaml'
@@ -24,12 +25,31 @@ function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunctio
   }
 }
 
+const complaintsDir = path.resolve('uploads/complaints')
+
+// Resolves a ZIP entry name inside uploads/complaints/ and returns null if the
+// entry would escape that directory (zip-slip / path traversal).
+function resolveInsideComplaintsDir (entryName: string): string | null {
+  if (typeof entryName !== 'string' || entryName.length === 0 || entryName.includes(String.fromCharCode(0))) {
+    return null
+  }
+  const normalizedName = entryName.split(String.fromCharCode(92)).join('/')
+  if (path.isAbsolute(normalizedName) || /^[a-zA-Z]:/.test(normalizedName)) {
+    return null
+  }
+  const absolutePath = path.resolve(complaintsDir, normalizedName)
+  if (!absolutePath.startsWith(complaintsDir + path.sep)) {
+    return null
+  }
+  return absolutePath
+}
+
 function handleZipFileUpload ({ file }: Request, res: Response, next: NextFunction) {
   if (utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
-    if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.fileWriteChallenge)) {
+    if ((file?.buffer) != null) {
       const buffer = file.buffer
-      const filename = file.originalname.toLowerCase()
-      const tempFile = path.join(os.tmpdir(), filename)
+      // never derive the temp file location from the client-supplied file name
+      const tempFile = path.join(os.tmpdir(), `juice-shop-upload-${crypto.randomUUID()}.zip`)
       fs.open(tempFile, 'w', function (err, fd) {
         if (err != null) { next(err) }
         fs.write(fd, buffer, 0, buffer.length, null, function (err) {
@@ -38,15 +58,15 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
             fs.createReadStream(tempFile)
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
-                const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                const absolutePath = entry.type === 'File' ? resolveInsideComplaintsDir(entry.path) : null
+                if (absolutePath !== null && path.dirname(absolutePath) === complaintsDir) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { console.error(err) }))
                 } else {
                   entry.autodrain()
                 }
-              }).on('error', function (err: unknown) { next(err) })
+              })
+              .on('error', function (err: unknown) { console.error(err) })
+              .on('close', function () { fs.unlink(tempFile, () => {}) })
           })
         })
       })
@@ -77,10 +97,17 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
+      if (/<!DOCTYPE|<!ENTITY/i.test(data)) {
+        // DTDs are never needed for complaint uploads; refusing them blocks XXE file disclosure and entity-expansion DoS
+        res.status(400)
+        next(new Error('XML documents containing a DTD or entity declarations are not allowed (' + file.originalname + ')'))
+        return
+      }
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        // entity substitution, DTD loading and network access are disabled
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, dtdload: false, dtdvalid: false, nonet: true, nocdata: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

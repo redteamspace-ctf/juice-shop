@@ -6,8 +6,14 @@ import { challenges } from '../data/datacache'
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
+      // The wallet secret must never be hardcoded in source code (or shipped in bundles);
+      // it is provided through the environment at deploy time.
+      const mnemonic = process.env.NFT_WALLET_MNEMONIC
+      if (!mnemonic) {
+        res.status(503).json({ success: false, message: 'NFT wallet is not configured.', status: challenges.nftUnlockChallenge })
+        return
+      }
       const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
       const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
       const privateKey = mnemonicWallet.privateKey
       const publicKey = mnemonicWallet.publicKey
