@@ -28,14 +28,24 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // Never send the answer to the client - it made the CAPTCHA trivially solvable by any script
+    res.json({ captchaId, captcha: expression })
   }
 }
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Reject malformed submissions cleanly: a missing captchaId/captcha must be
+    // a denied CAPTCHA (401), not an unhandled Sequelize error (500). An
+    // undefined captchaId reaching the query makes enforcement look broken.
+    if (req.body?.captchaId === undefined || req.body?.captcha === undefined) {
+      res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
+      return
+    }
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // A solved CAPTCHA is consumed: re-sending the same id/answer pair must not work for further submissions
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { WindowRefService } from '../Services/window-ref.service'
 import { ActivatedRoute, Router, RouterLink } from '@angular/router'
 import { Component, NgZone, type OnInit, inject } from '@angular/core'
@@ -60,8 +60,6 @@ export class LoginComponent implements OnInit {
   public clientId = '1005568560502-6hm16lef8oh46hr2d98vf2ohlnj4nfhq.apps.googleusercontent.com'
   public oauthUnavailable = true
   public redirectUri = ''
-  public testingUsername = 'testing@juice-sh.op'
-  public testingPassword = 'IamUsedForTesting'
 
   ngOnInit (): void {
     const email = localStorage.getItem('email')

@@ -23,14 +23,18 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          // The masked email is ambiguous (different addresses mask to the same value), so additionally
+          // require the order id prefix that is derived from the customer's real email address
+          const ownOrderPrefix = security.hash(email).slice(0, 4) + '-'
+          orders = (await db.ordersCollection.find({ email: updatedEmail }))
+            .filter((order: { orderId: string }) => order.orderId.startsWith(ownOrderPrefix))
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return

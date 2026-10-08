@@ -5,7 +5,7 @@
 
 import { type DestroyRef, type OutputEmitterRef } from '@angular/core'
 import { type ChallengeService } from '../../Services/challenge.service'
-import { type CookieService } from 'ngy-cookie'
+import { type CookieService } from 'ngx-cookie'
 import { ResultState } from '../coding-challenge.types'
 
 export function handleVerdict (config: {

@@ -26,7 +26,7 @@ import { PaymentMethodComponent } from '../payment-method/payment-method.compone
 import { RouterModule } from '@angular/router'
 import { OrderSummaryComponent } from '../order-summary/order-summary.component'
 import { PurchaseBasketComponent } from '../purchase-basket/purchase-basket.component'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { WalletService } from '../Services/wallet.service'
 import { DeliveryService } from '../Services/delivery.service'
 import { UserService } from '../Services/user.service'

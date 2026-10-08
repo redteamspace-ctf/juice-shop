@@ -6,7 +6,7 @@
 import { Component, type OnInit, inject } from '@angular/core'
 import { ConfigurationService } from '../Services/configuration.service'
 import { MatDialogRef } from '@angular/material/dialog'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { TranslateModule } from '@ngx-translate/core'
 
 import { MatIconModule } from '@angular/material/icon'

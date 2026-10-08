@@ -4,7 +4,6 @@
  */
 
 import { Component, type OnInit, inject } from '@angular/core'
-import { DomSanitizer } from '@angular/platform-browser'
 import { ConfigurationService } from '../Services/configuration.service'
 import { FeedbackService } from '../Services/feedback.service'
 import { Gallery, type GalleryRef, GalleryComponent, GalleryImageDef } from 'ng-gallery'
@@ -30,7 +29,6 @@ library.add(faFacebook, faTwitter, faSlack, faReddit, faNewspaper, faStar, fasSt
 export class AboutComponent implements OnInit {
   private readonly configurationService = inject(ConfigurationService)
   private readonly feedbackService = inject(FeedbackService)
-  private readonly sanitizer = inject(DomSanitizer)
   private readonly gallery = inject(Gallery)
 
   public blueSkyUrl?: string
@@ -48,7 +46,7 @@ export class AboutComponent implements OnInit {
     'assets/public/images/carousel/2.jpg',
     'assets/public/images/carousel/3.jpg',
     'assets/public/images/carousel/4.jpg',
-    'assets/public/images/carousel/5.png',
+    'assets/public/images/carousel/5.png', // re-encoded from a lossy copy: the original PNG carried a hidden steganographic image
     'assets/public/images/carousel/6.jpg',
     'assets/public/images/carousel/7.jpg'
   ]
@@ -113,12 +111,10 @@ export class AboutComponent implements OnInit {
       .subscribe((feedbacks) => {
         for (let i = 0; i < feedbacks.length; i++) {
 
+          // Rendered via [innerHTML] without a trust bypass, so Angular sanitizes the user-supplied comment
           feedbacks[i].comment = `<figcaption><p class="feedback-comment">${
             feedbacks[i].comment
           }</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
-          feedbacks[i].comment = this.sanitizer.bypassSecurityTrustHtml(
-            feedbacks[i].comment
-          )
 
           this.galleryRef.addImage({
             src: this.images[i % this.images.length],

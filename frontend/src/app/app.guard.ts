@@ -7,6 +7,8 @@ import { type CanActivate, Router } from '@angular/router'
 import { jwtDecode } from 'jwt-decode'
 import { roles } from './roles'
 import { Injectable, NgZone, inject } from '@angular/core'
+import { firstValueFrom } from 'rxjs'
+import { UserService } from './Services/user.service'
 
 @Injectable()
 export class LoginGuard implements CanActivate {
@@ -47,16 +49,24 @@ export class LoginGuard implements CanActivate {
 @Injectable()
 export class AdminGuard implements CanActivate {
   private readonly loginGuard = inject(LoginGuard)
+  private readonly userService = inject(UserService)
 
-
-  canActivate () {
+  // The token in localStorage is only decoded, never verified, in the browser - so the role it claims is
+  // confirmed by the server (which verifies the signature) before the administration page is rendered
+  async canActivate () {
     const payload = this.loginGuard.tokenDecode()
     if (payload?.data && payload.data.role === roles.admin) {
-      return true
-    } else {
-      this.loginGuard.forbidRoute()
-      return false
+      try {
+        const user: any = await firstValueFrom(this.userService.whoAmI(['role']))
+        if (user?.role === roles.admin) {
+          return true
+        }
+      } catch (err) {
+        console.log(err)
+      }
     }
+    this.loginGuard.forbidRoute()
+    return false
   }
 }
 

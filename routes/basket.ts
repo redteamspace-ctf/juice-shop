@@ -17,6 +17,12 @@ export function retrieveBasket () {
     try {
       const id = req.params.id
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+      // A basket may only be read by the customer it belongs to
+      const owner = security.authenticatedUsers.from(req)
+      if (basket && basket.UserId !== owner?.data?.id) {
+        res.status(403).json({ error: 'Not your basket' })
+        return
+      }
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
         const user = security.authenticatedUsers.from(req)

@@ -14,6 +14,11 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      return res.status(401).json({ status: 'error', message: 'You need to be logged in to write a review' })
+    }
+    // The author is whoever is logged in, not whatever name the client sends
+    req.body.author = user.data.email
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
       () => user?.data?.email !== req.body.author

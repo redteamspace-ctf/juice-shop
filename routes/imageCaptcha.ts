@@ -28,7 +28,8 @@ export function imageCaptchas () {
       }
       const imageCaptchaInstance = ImageCaptchaModel.build(imageCaptcha)
       await imageCaptchaInstance.save()
-      res.json(imageCaptcha)
+      // Never send the answer to the client - only the rendered image is needed
+      res.json({ image: captcha.data })
     } catch (error) {
       res.status(400).send(res.__('Unable to create CAPTCHA. Please try again.'))
     }
@@ -49,7 +50,13 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // A missing CAPTCHA must fail closed: previously `!captchas[0]` let any
+    // request through when no CAPTCHA had been issued, bypassing it entirely.
+    // Require a matching, unexpired CAPTCHA, validate the answer type, and
+    // consume it so it cannot be replayed.
+    const captcha = captchas[0]
+    if (captcha && typeof req.body.answer === 'string' && req.body.answer === captcha.answer) {
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

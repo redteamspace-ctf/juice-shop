@@ -6,7 +6,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, type OnInit, type AfterViewInit, type OnDestroy, ElementRef, inject, input, output, viewChild } from '@angular/core'
 import { MatCardModule } from '@angular/material/card'
 import { TranslateModule } from '@ngx-translate/core'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 
 import { EditorView } from 'codemirror'
 import { EditorState, StateField, StateEffect } from '@codemirror/state'

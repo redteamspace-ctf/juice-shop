@@ -20,6 +20,21 @@ export function updateUserProfile () {
       return
     }
 
+    // This form is authenticated by cookie only, so reject cross-site submissions (CSRF):
+    // the browser-supplied Origin (or Referer) has to point to this very host
+    const source = req.headers.origin ?? req.headers.referer
+    let sameOrigin = false
+    try {
+      sameOrigin = source !== undefined && new URL(source).host === req.headers.host
+    } catch {
+      sameOrigin = false
+    }
+    if (!sameOrigin) {
+      res.status(403)
+      next(new Error('Cross-site request blocked'))
+      return
+    }
+
     try {
       const user = await UserModel.findByPk(loggedInUser.data.id)
       if (!user) {

@@ -58,16 +58,13 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
+          email = security.sanitizeSecure(email)
+          challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
+            return utils.contains(
+              email,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
           this.setDataValue('email', email)
         }
       }, // vuln-code-snippet hide-end
@@ -112,7 +109,14 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       },
       totpSecret: {
         type: DataTypes.STRING,
-        defaultValue: ''
+        defaultValue: '',
+        // Stored encrypted: a database leak (e.g. via injection) must not reveal users' 2FA seeds
+        set (secret: string) {
+          this.setDataValue('totpSecret', security.encryptAtRest(secret))
+        },
+        get () {
+          return security.decryptAtRest(this.getDataValue('totpSecret'))
+        }
       },
       isActive: {
         type: DataTypes.BOOLEAN,

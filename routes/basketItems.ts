@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -34,15 +35,23 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    // Every occurrence of a duplicated BasketId must match, not just the first one that gets validated
+    if (!user?.bid || basketIds.some((basketId) => Number(basketId) != Number(user.bid))) { // eslint-disable-line eqeqeq
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        BasketId: user.bid,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      // Soft-deleted products are no longer for sale; findByPk is paranoid and skips them
+      const product = await ProductModel.findByPk(basketItem.ProductId)
+      if (product == null) {
+        res.status(400).json({ error: 'Product not available' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
@@ -67,6 +76,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
     try {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
+      // Items can only be changed in the caller's own basket, and never moved to another basket or product
+      if (item != null && Number(item.BasketId) !== Number(user?.bid)) {
+        res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
+        return
+      }
+      delete req.body.BasketId
+      delete req.body.ProductId
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
         if (item == null) {
@@ -83,6 +99,11 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  // Quantities must be positive whole numbers; negative quantities produced orders with a negative total
+  if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
+    res.status(400).json({ error: 'Quantity must be a positive whole number' })
+    return
+  }
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')

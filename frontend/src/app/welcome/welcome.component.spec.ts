@@ -6,7 +6,7 @@
 import { TranslateModule } from '@ngx-translate/core'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { MatDialog, MatDialogModule } from '@angular/material/dialog'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieModule, CookieService } from 'ngx-cookie'
 
 import { type ComponentFixture, TestBed } from '@angular/core/testing'
 

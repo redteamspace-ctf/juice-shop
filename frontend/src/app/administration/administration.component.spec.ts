@@ -8,7 +8,7 @@ import { FeedbackDetailsComponent } from '../feedback-details/feedback-details.c
 
 import { FeedbackService } from '../Services/feedback.service'
 import { UserService } from '../Services/user.service'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { type ComponentFixture, TestBed } from '@angular/core/testing'
 
 import { AdministrationComponent } from './administration.component'

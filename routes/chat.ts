@@ -46,6 +46,13 @@ async function getUserId (req: Request): Promise<number | undefined> {
   return decoded?.data?.id
 }
 
+function isAdminRequest (req: Request): boolean {
+  const token = utils.jwtFrom(req)
+  if (!token || !security.verify(token)) return false
+  const decoded = security.decode(token) as { data?: { role?: string } } | undefined
+  return decoded?.data?.role === roles.admin
+}
+
 async function getUserNameFromToken (req: Request): Promise<string | undefined> {
   const userId = await getUserId(req)
   if (!userId) return undefined
@@ -172,11 +179,20 @@ export function chat () {
 
       // vuln-code-snippet start chatbotPromptInjectionChallenge
       generateCoupon: tool({
-        description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+        description: 'Generate a discount coupon for a customer with a damaged order. Requires the order ID of one of the customer\'s own orders.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          discount: z.number().int().min(1).max(10).describe('The discount percentage for the coupon (maximum 10)'), // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          orderId: z.string().describe('The order ID of the damaged order (format: xxxx-xxxxxxxxxxxxxxxx)')
         }),
-        execute: async ({ discount }) => {
+        execute: async ({ discount, orderId }) => {
+          // The coupon policy is enforced here, not by the prompt: the LLM's tool arguments are untrusted input
+          if (!Number.isInteger(discount) || discount < 1 || discount > 10) return { error: 'Discount must be between 1 and 10 percent.' }
+          const userId = await getUserId(req)
+          if (!userId) return { error: 'Customer not authenticated' }
+          const user = await UserModel.findByPk(userId, { attributes: ['email'] })
+          if (!user) return { error: 'Customer not found' }
+          const order = await db.ordersCollection.findOne({ orderId })
+          if (!order || order.email !== user.email.replace(/[aeiou]/gi, '*')) return { error: 'No order with this ID found for the current customer.' }
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
           challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
           const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
@@ -223,6 +239,8 @@ export function chat () {
               return req.cookies.show_tool_calls === 'true' && role !== roles.admin
             })
             metricToolCalls.labels({ tool: event.toolName }).inc()
+            // Tool call internals are debugging information for administrators only; a client-side cookie must not unlock them
+            if (!isAdminRequest(req)) break
             res.write(`data: ${JSON.stringify({
               choices: [{
                 delta: {

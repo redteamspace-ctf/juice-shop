@@ -12,7 +12,7 @@ import { ConversationStorageService } from '../../Services/conversation-storage.
 import { ConfigurationService } from '../../Services/configuration.service'
 import { UserService } from '../../Services/user.service'
 import { LoginGuard } from '../../app.guard'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { of } from 'rxjs'
 import { ChatInputBoxComponent } from '../chat-input-box/chat-input-box.component'
 

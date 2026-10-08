@@ -11,6 +11,8 @@ import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
+const confidentialFiles = ['acquisitions.md']
+
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
     const file = params.file
@@ -24,7 +26,20 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
+    // Reject (encoded) null bytes outright instead of cutting them off after the extension check,
+    // which let e.g. a ".bak" file pass as ".md"
+    if (file.includes('%00') || file.includes('\0')) {
+      res.status(403)
+      next(new Error('Only .md and .pdf files are allowed!'))
+      return
+    }
+    // Internal documents are not meant for the public download area
+    if (confidentialFiles.includes(file.toLowerCase())) {
+      res.status(403)
+      next(new Error('File access not allowed'))
+      return
+    }
+    if (file && endsWithAllowlistedFileType(file)) {
       file = security.cutOffPoisonNullByte(file)
 
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })

@@ -7,7 +7,7 @@ import { TestBed } from '@angular/core/testing'
 import { firstValueFrom, of, throwError } from 'rxjs'
 
 import { LocalBackupService } from './local-backup.service'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieModule, CookieService } from 'ngx-cookie'
 import { TranslateNoOpLoader, TranslateLoader, TranslateModule } from '@ngx-translate/core'
 import { MatSnackBar } from '@angular/material/snack-bar'
 import { ChallengeService } from './challenge.service'

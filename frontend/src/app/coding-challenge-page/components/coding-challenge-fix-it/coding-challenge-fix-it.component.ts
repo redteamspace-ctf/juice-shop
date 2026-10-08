@@ -9,7 +9,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox'
 import { MatButtonToggleModule } from '@angular/material/button-toggle'
 import { FormsModule } from '@angular/forms'
 import { TranslateModule } from '@ngx-translate/core'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'

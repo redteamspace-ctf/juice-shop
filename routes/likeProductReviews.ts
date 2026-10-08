@@ -11,8 +11,6 @@ import * as security from '../lib/insecurity'
 import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
-const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
-
 export function likeProductReviews () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const id = req.body.id
@@ -32,25 +30,19 @@ export function likeProductReviews () {
         return res.status(403).json({ error: 'Not allowed' })
       }
 
-      await db.reviewsCollection.update(
-        { _id: id },
-        { $inc: { likesCount: 1 } }
+      // Check and write in ONE update: the old read, check, wait, write sequence let parallel requests all pass
+      // the "not liked yet" check (race condition). $addToSet additionally guarantees one entry per user.
+      const result = await db.reviewsCollection.update(
+        { _id: id, likedBy: { $ne: user.data.email } },
+        { $inc: { likesCount: 1 }, $addToSet: { likedBy: user.data.email } }
       )
-
-      // Artificial wait for timing attack challenge
-      await sleep(150)
+      if (!result?.modified) {
+        return res.status(403).json({ error: 'Not allowed' })
+      }
       try {
         const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
-        const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
-
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
+        const count = updatedReview.likedBy.filter(email => email === user.data.email).length
         challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
-
-        const result = await db.reviewsCollection.update(
-          { _id: id },
-          { $set: { likedBy: updatedLikedBy } }
-        )
         res.json(result)
       } catch (err) {
         res.status(500).json(err)

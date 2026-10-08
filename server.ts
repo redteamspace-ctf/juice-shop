@@ -91,7 +91,6 @@ import { getLanguageList } from './routes/languages'
 import { getUserProfile } from './routes/userProfile'
 import { serveAngularClient } from './routes/angular'
 import { resetPassword } from './routes/resetPassword'
-import { serveLogFiles } from './routes/logfileServer'
 import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
@@ -104,19 +103,16 @@ import { retrieveLoggedInUser } from './routes/currentUser'
 import authenticatedUsers from './routes/authenticatedUsers'
 import { securityQuestion } from './routes/securityQuestion'
 import { servePremiumContent } from './routes/premiumReward'
-import { contractExploitListener } from './routes/web3Wallet'
 import { updateUserProfile } from './routes/updateUserProfile'
 import { getVideo, promotionVideo } from './routes/videoHandler'
 import { likeProductReviews } from './routes/likeProductReviews'
 import { repeatNotification } from './routes/repeatNotification'
 import { serveQuarantineFiles } from './routes/quarantineServer'
 import { showProductReviews } from './routes/showProductReviews'
-import { nftMintListener, walletNFTVerify } from './routes/nftMint'
 import { createProductReviews } from './routes/createProductReviews'
 import { getWalletBalance, addWalletBalance } from './routes/wallet'
 import { retrieveAppConfiguration } from './routes/appConfiguration'
 import { updateProductReviews } from './routes/updateProductReviews'
-import { servePrivacyPolicyProof } from './routes/privacyPolicyProof'
 import { profileImageUrlUpload } from './routes/profileImageUrlUpload'
 import { profileImageFileUpload } from './routes/profileImageFileUpload'
 import { serveCodeFixes, checkCorrectFix } from './routes/vulnCodeFixes'
@@ -228,6 +224,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The admin page's assets are only served to admins (the page loads them via <img>, so the token comes from the cookie, not the Authorization header) */
+  app.use('/assets/public/images/padding/19px.png', (req: Request, res: Response, next: NextFunction) => {
+    const token = /(?:^|;\s*)token=([^;]+)/.exec(req.headers.cookie ?? '')?.[1] ?? ''
+    const decoded = security.verify(token) && security.decode(token)
+    if (decoded?.data?.role === security.roles.admin) {
+      next()
+    } else {
+      res.status(403).send()
+    }
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
@@ -266,7 +273,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* no directory listing: files are only served by exact name through the allowlist below */ // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -277,10 +284,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
-  app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* Server logs are not served over the web at all (no listing, no download); read them on the host.
+     Answer with an explicit 404 so the path does not fall through to the SPA's index.html (status 200) */ // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs', (req: Request, res: Response) => { res.status(404).send() })
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -342,8 +348,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.enable('trust proxy')
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 10,
+    // Key on the TCP peer address: client-supplied headers like X-Forwarded-For can be rotated to dodge the limit
+    keyGenerator (req: Request) { return req.socket.remoteAddress ?? 'unknown' } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -358,15 +365,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
+  /* Users: Only POST is allowed in order to register a new user; listing and details are for the administration section only */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
-  app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.post('/api/Products', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line changeProductChallenge
+  app.put('/api/Products/:id', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet vuln-line changeProductChallenge
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -394,10 +402,36 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  /* The user list with session details feeds the administration section: admins only */
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
+  /* Throttle feedback submissions per client connection, in addition to the one-time CAPTCHA */
+  app.post('/api/Feedbacks', rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    keyGenerator (req: Request) { return req.socket.remoteAddress ?? 'unknown' }
+  }))
+  /* Ratings are 1 to 5 stars; the UI's star widget is not a validation */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const rating = Number(req.body.rating)
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      res.status(400).json({ error: 'Rating must be between 1 and 5 stars' })
+      return
+    }
+    next()
+  })
+  /* Feedback is always attributed to the authenticated user (or nobody), never to a client-supplied UserId */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const user = security.authenticatedUsers.from(req)
+    if (user?.data?.id) {
+      req.body.UserId = user.data.id
+    } else {
+      delete req.body.UserId
+    }
+    next()
+  })
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
@@ -405,14 +439,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
-      if (req.body.email.length !== 0 && req.body.password.length !== 0) {
-        req.body.email = req.body.email.trim()
-        req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
-      } else {
-        res.status(400).send(res.__('Invalid email/password cannot be empty'))
-      }
+    // Registration input is validated on the server; the form's client-side checks can simply be skipped
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : ''
+    const password = typeof req.body.password === 'string' ? req.body.password.trim() : ''
+    const passwordRepeat = typeof req.body.passwordRepeat === 'string' ? req.body.passwordRepeat.trim() : undefined
+    if (email.length === 0 || password.length === 0 || !/^[^\s@]+@[^\s@]+$/.test(email)) {
+      res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      return
+    }
+    if (passwordRepeat !== password) {
+      res.status(400).send(res.__('New and repeated password do not match.'))
+      return
+    }
+    req.body.email = email
+    req.body.password = password
+    req.body.passwordRepeat = passwordRepeat
+    // Self-registration always creates a plain customer: privilege and security fields cannot be set by the client
+    for (const field of ['role', 'deluxeToken', 'totpSecret', 'isActive', 'profileImage', 'id']) {
+      delete req.body[field]
     }
     next()
   })
@@ -639,9 +683,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Web3 API endpoints */
   app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
   app.get('/rest/web3/nftUnlocked', nftUnlocked())
-  app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))
-  app.post('/rest/web3/walletNFTVerify', walletNFTVerify())
-  app.post('/rest/web3/walletExploitAddress', utils.asyncHandler(contractExploitListener()))
+  /* The Honey Pot NFT minting and the Web3 wallet integrate external contracts with known exploitable flaws;
+     their endpoints stay offline until fixed contracts are deployed */
 
   /* B2B Order API */
   app.post('/b2b/v2/orders', b2bOrder())
@@ -649,7 +692,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
   app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
-  app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
+  /* No hidden "proof" endpoint assembled from highlighted words in the privacy policy (security through obscurity) */
 
   /* Route for dataerasure page */
   app.use('/dataerasure', dataErasure)
@@ -675,7 +718,23 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  /* Never send stack traces or internal error details to clients; log them instead */
+  app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+      next(err)
+      return
+    }
+    const status = res.statusCode >= 400 ? res.statusCode : 500
+    logger.error(`${req.method} ${req.originalUrl}: ${utils.getErrorMessage(err)}`)
+    // 4xx messages are our own, user-facing validation errors; everything else gets a generic message
+    const message = status < 500 && err instanceof Error ? err.message : 'Unexpected error'
+    res.status(status)
+    if (req.accepts('html') && !req.accepts('json')) {
+      res.type('text').send(message)
+    } else {
+      res.json({ error: message })
+    }
+  })
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.
@@ -722,7 +781,18 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+/* Metrics are for the monitoring system only: require its bearer token (METRICS_TOKEN), or a local scrape if no token is configured */
+const metricsAccess = (req: Request, res: Response, next: NextFunction) => {
+  const metricsToken = process.env.METRICS_TOKEN
+  const remote = req.socket.remoteAddress ?? ''
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+  if ((metricsToken && req.headers.authorization === `Bearer ${metricsToken}`) || (!metricsToken && isLocal)) {
+    next()
+  } else {
+    res.status(404).send()
+  }
+}
+app.get('/metrics', metricsAccess, utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

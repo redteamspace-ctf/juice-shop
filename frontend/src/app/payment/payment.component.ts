@@ -28,7 +28,7 @@ import { ActivatedRoute, type ParamMap, Router } from '@angular/router'
 import { WalletService } from '../Services/wallet.service'
 import { DeliveryService } from '../Services/delivery.service'
 import { UserService } from '../Services/user.service'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { Location } from '@angular/common'
 import { SnackBarHelperService } from '../Services/snack-bar-helper.service'
 import { MatIconModule } from '@angular/material/icon'
@@ -71,7 +71,7 @@ export class PaymentComponent implements OnInit {
   public redditUrl = null
   public applicationName = 'OWASP Juice Shop'
   private campaignCoupon: string
-  public couponControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.minLength(10), Validators.maxLength(10)])
+  public couponControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.minLength(18), Validators.maxLength(18)])
   public clientDate: any
   public paymentId: any = undefined
   public couponPanelExpanded = false

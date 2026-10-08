@@ -21,10 +21,12 @@ export function restoreProgress () {
       return res.status(404).send(invalidContinueCode)
     }
     const ids = hashids.decode(continueCode)
-    if (challengeUtils.notSolved(challenges.continueCodeChallenge) && ids.includes(999)) {
-      challengeUtils.solve(challenges.continueCodeChallenge)
-      res.end()
-    } else if (ids.length > 0) {
+    // Continue codes are only accepted if every id in them belongs to an existing challenge
+    const knownIds = new Set(Object.values(challenges).map((challenge) => challenge.id))
+    if (ids.some((id) => !knownIds.has(Number(id)))) {
+      return res.status(404).send(invalidContinueCode)
+    }
+    if (ids.length > 0) {
       for (const challenge of Object.values(challenges)) {
         if (ids.includes(challenge.id)) {
           challengeUtils.solve(challenge, true)

@@ -7,7 +7,7 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing'
 import { TranslateModule } from '@ngx-translate/core'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { CookieModule, CookieService } from 'ngy-cookie'
+import { CookieModule, CookieService } from 'ngx-cookie'
 import { of } from 'rxjs'
 
 import { CodingChallengeFindItComponent } from './coding-challenge-find-it.component'
