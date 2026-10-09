@@ -116,11 +116,10 @@ void describe('/public/images/padding', () => {
     assert.equal(res.headers['content-type'], 'image/png')
   })
 
-  void it('GET tracking image for "Token Sale" page access challenge', async () => {
+  void it('GET tracking image for "Token Sale" page access challenge is forbidden', async () => {
     const res = await request(app)
       .get('/assets/public/images/padding/56px.png')
-    assert.equal(res.status, 200)
-    assert.equal(res.headers['content-type'], 'image/png')
+    assert.equal(res.status, 403)
   })
 
   void it('GET tracking image for "Privacy Policy" page access challenge', async () => {
@@ -201,10 +200,15 @@ void describe('Hidden URL', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('GET folder containing access log files for "Access Log" challenge', async () => {
+  void it('GET access log files for "Access Log" challenge is forbidden', async () => {
     const res = await request(app)
       .get('/support/logs/access.log.' + utils.toISO8601(new Date()))
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/octet-stream'))
+    assert.equal(res.status, 403)
+  })
+
+  void it('GET folder containing access log files is forbidden', async () => {
+    const res = await request(app)
+      .get('/support/logs')
+    assert.equal(res.status, 403)
   })
 })

@@ -9,9 +9,7 @@ import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 
 let app: Express
 let authHeader: Record<string, string>
@@ -179,20 +177,18 @@ void describe('/api/Users', () => {
     assert.equal(res.body.errors[0].message, 'Validation isIn on role failed')
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-    void it('POST new user with XSS attack in email address', async () => {
-      const res = await request(app)
-        .post('/api/Users')
-        .set(jsonHeader)
-        .send({
-          email: '<iframe src="javascript:alert(`xss`)">',
-          password: 'does.not.matter'
-        })
-      assert.equal(res.status, 201)
-      assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.email, '<iframe src="javascript:alert(`xss`)">')
-    })
-  }
+  void it('POST new user with XSS attack in email address is sanitized', async () => {
+    const res = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: 'xss<iframe src="javascript:alert(`xss`)">@juice-sh.op',
+        password: 'does.not.matter'
+      })
+    assert.equal(res.status, 201)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.email, 'xss@juice-sh.op')
+  })
 })
 
 void describe('/api/Users/:id', () => {
@@ -312,18 +308,16 @@ void describe('/rest/user/whoami', () => {
     assert.equal(typeof res.body.user.email, 'string')
   })
 
-  void it('GET who-am-i with fields parameter can be tricked into returning password', async () => {
+  void it('GET who-am-i with fields parameter cannot be tricked into returning sensitive fields', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
     })
     const res = await request(app)
-      .get('/rest/user/whoami?fields=id,email,password')
+      .get('/rest/user/whoami?fields=id,email,password,totpSecret,deluxeToken,role')
       .set({ Cookie: `token=${token}` })
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.user.id, 'number')
-    assert.equal(typeof res.body.user.email, 'string')
-    assert.equal(typeof res.body.user.password, 'string')
+    assert.deepEqual(Object.keys(res.body.user).sort(), ['email', 'id'])
   })
 })

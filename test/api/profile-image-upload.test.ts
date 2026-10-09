@@ -11,6 +11,8 @@ import config from 'config'
 import path from 'node:path'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import { UserModel } from '../../models/user'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 
@@ -85,7 +87,7 @@ void describe('/profile/image/url', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('POST profile image URL redirects even for invalid image URL', async () => {
+  void it('POST profile image URL of a host that cannot be resolved is refused', async () => {
     const { token } = await login(app, {
       email: `jim@${config.get<string>('application.domain')}`,
       password: 'ncc-1701'
@@ -97,7 +99,53 @@ void describe('/profile/image/url', () => {
       .field('imageUrl', 'https://notanimage.here/100/100')
       .redirects(0)
 
+    assert.equal(res.status, 400)
+    assert.equal(res.body.status, 'error')
+  })
+
+  void it('POST profile image URL never lets the server request internal resources', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+    const before = (await UserModel.findOne({ where: { email: `jim@${config.get<string>('application.domain')}` } }))?.profileImage
+
+    for (const imageUrl of [
+      'http://localhost:3000/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3',
+      'http://127.0.0.1:3000/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3',
+      'http://[::1]:3000/rest/admin/application-configuration',
+      'http://169.254.169.254/latest/meta-data/',
+      'file:///etc/passwd'
+    ]) {
+      const res = await request(app)
+        .post('/profile/image/url')
+        .set('Authorization', `Bearer ${token}`)
+        .field('imageUrl', imageUrl)
+        .redirects(0)
+      assert.equal(res.status, 400)
+      assert.equal(res.body.status, 'error')
+    }
+
+    const user = await UserModel.findOne({ where: { email: `jim@${config.get<string>('application.domain')}` } })
+    assert.equal(user?.profileImage, before)
+    assert.equal(challenges.ssrfChallenge.solved, false)
+  })
+
+  void it('POST profile image URL of a host that is not allow-listed is stored as a link only', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'https://example.com/avatar.png')
+      .redirects(0)
+
     assert.equal(res.status, 302)
+    const user = await UserModel.findOne({ where: { email: `jim@${config.get<string>('application.domain')}` } })
+    assert.equal(user?.profileImage, 'https://example.com/avatar.png')
   })
 
   void it('POST profile image URL forbidden for anonymous user', { skip: 'FIXME runs into "socket hang up"' }, async () => {

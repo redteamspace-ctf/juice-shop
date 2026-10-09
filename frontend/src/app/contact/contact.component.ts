@@ -8,6 +8,7 @@ import { CaptchaService } from '../Services/captcha.service'
 import { UserService } from '../Services/user.service'
 import { UntypedFormControl, Validators, FormsModule, ReactiveFormsModule } from '@angular/forms'
 import { Component, type OnInit, inject } from '@angular/core'
+import { DomSanitizer } from '@angular/platform-browser'
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { faPaperPlane, faStar } from '@fortawesome/free-solid-svg-icons'
 import { FormSubmitService } from '../Services/form-submit.service'
@@ -37,6 +38,7 @@ export class ContactComponent implements OnInit {
   private readonly formSubmitService = inject(FormSubmitService)
   private readonly translate = inject(TranslateService)
   private readonly snackBarHelperService = inject(SnackBarHelperService)
+  private readonly sanitizer = inject(DomSanitizer)
 
   public authorControl: UntypedFormControl = new UntypedFormControl({ value: '', disabled: true }, [])
   public feedbackControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.maxLength(160)])
@@ -71,7 +73,8 @@ export class ContactComponent implements OnInit {
   getNewCaptcha () {
     this.captchaService.getCaptcha().subscribe({
       next: (data: any) => {
-        this.captcha = data.captcha
+        // The CAPTCHA arrives as a server-rendered SVG image (the expression itself is never sent as text)
+        this.captcha = this.sanitizer.bypassSecurityTrustHtml(data.image)
         this.captchaId = data.captchaId
       },
       error: (err) => err
@@ -115,6 +118,7 @@ export class ContactComponent implements OnInit {
         this.snackBarHelperService.open(err.error, 'errorBar')
         this.feedback = {}
         this.resetCaptcha()
+        this.getNewCaptcha() // every CAPTCHA allows a single attempt
       }
     })
   }

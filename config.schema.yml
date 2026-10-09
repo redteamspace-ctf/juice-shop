@@ -31,6 +31,8 @@ application:
     type: string
   customMetricsPrefix:
     type: string
+  profileImageUrlAllowlist:
+    - type: string
   chatBot:
     name:
       type: string

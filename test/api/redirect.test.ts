@@ -25,11 +25,11 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm when this URL is passed as "to" parameter', async () => {
+  void it('GET error when deprecated crypto currency address https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm is passed as "to" parameter', async () => {
     const res = await request(app)
       .get('/redirect?to=https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
   void it('GET redirected to http://shop.spreadshirt.com/juiceshop when this URL is passed as "to" parameter', async () => {
@@ -53,18 +53,18 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW when this URL is passed as "to" parameter', async () => {
+  void it('GET error when deprecated crypto currency address https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW is passed as "to" parameter', async () => {
     const res = await request(app)
       .get('/redirect?to=https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
-  void it('GET redirected to https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 when this URL is passed as "to" parameter', async () => {
+  void it('GET error when deprecated crypto currency address https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 is passed as "to" parameter', async () => {
     const res = await request(app)
       .get('/redirect?to=https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
   void it('GET error message with information leakage when calling /redirect without query parameter', async () => {

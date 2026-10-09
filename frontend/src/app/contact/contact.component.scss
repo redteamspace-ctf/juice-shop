@@ -50,6 +50,11 @@ mat-card {
   font-size: small;
 }
 
+.captcha-image {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 ::ng-deep .mat-mdc-slider {
   --mdc-slider-handle-color: var(--theme-accent);
   --mdc-slider-focus-handle-color: var(--theme-accent);

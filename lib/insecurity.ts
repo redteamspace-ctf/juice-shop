@@ -43,6 +43,20 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+export const hashPassword = (password: string) => {
+  const salt = crypto.randomBytes(16).toString('hex')
+  return `scrypt$${salt}$${crypto.scryptSync(password, salt, 32).toString('hex')}`
+}
+
+export const verifyPassword = (password: unknown, storedHash: unknown) => {
+  if (typeof password !== 'string' || typeof storedHash !== 'string') return false
+  const [algorithm, salt, hash] = storedHash.split('$')
+  if (algorithm !== 'scrypt' || !salt || !hash) return false
+  const expected = Buffer.from(hash, 'hex')
+  if (expected.length !== 32) return false
+  return crypto.timingSafeEqual(crypto.scryptSync(password, salt, expected.length), expected)
+}
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
@@ -123,9 +137,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +146,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
@@ -164,6 +175,17 @@ export const isAccounting = () => {
   }
 }
 
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
@@ -181,6 +203,29 @@ export const appendUserId = () => {
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
+    }
+  }
+}
+
+/* Refuses requests without a valid session token of a logged-in user with a regular JSON 401 */
+export const requireLoggedInUser = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    let loggedIn = false
+    try {
+      // Only accept tokens signed by the shop itself (RS256), never unsigned or HMAC-signed ones
+      if (token && jws.decode(token)?.header?.alg === 'RS256') {
+        jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+          loggedIn = err === null && !!decoded?.data
+        })
+      }
+    } catch {
+      loggedIn = false
+    }
+    if (loggedIn) {
+      next()
+    } else {
+      res.status(401).json({ status: 'error', message: 'You need to be logged in to use this feature.' })
     }
   }
 }

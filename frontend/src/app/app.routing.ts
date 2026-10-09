@@ -13,7 +13,6 @@ import { RegisterComponent } from './register/register.component'
 import { ForgotPasswordComponent } from './forgot-password/forgot-password.component'
 import { SearchResultComponent } from './search-result/search-result.component'
 import { LoginComponent } from './login/login.component'
-import { AdministrationComponent } from './administration/administration.component'
 import { ChangePasswordComponent } from './change-password/change-password.component'
 import { ComplaintComponent } from './complaint/complaint.component'
 import { RouterModule, type Routes, type UrlMatchResult, type UrlSegment } from '@angular/router'
@@ -37,7 +36,7 @@ import { OrderHistoryComponent } from './order-history/order-history.component'
 import { DeliveryMethodComponent } from './delivery-method/delivery-method.component'
 import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
-import { AccountingGuard, AdminGuard, LoginGuard } from './app.guard'
+import { AccountingGuard, LoginGuard } from './app.guard'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
 import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
@@ -75,11 +74,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -236,8 +238,10 @@ const routes: Routes = [
     loadChildren: async () => await loadWeb3WalletModule()
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    // An unlinked URL is no protection: the sandbox is only available after signing in
+    path: 'web3-sandbox', // vuln-code-snippet neutral-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [LoginGuard] // vuln-code-snippet neutral-line web3SandboxChallenge
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
@@ -258,8 +262,10 @@ const routes: Routes = [
     component: OAuthComponent
   },
   { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+    // The unreleased page is not reachable without signing in, whatever the route is called
+    matcher: tokenMatcher, // vuln-code-snippet neutral-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    canActivate: [LoginGuard] // vuln-code-snippet neutral-line tokenSaleChallenge
   }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',

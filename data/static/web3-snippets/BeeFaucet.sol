@@ -12,8 +12,9 @@ contract BeeFaucet {
     uint8 public balance = 200;
 
     function withdraw(uint8 amount) public {
+        // Check before subtracting, so the faucet balance can never wrap around
+        require(amount <= balance, "Withdrew more than the account balance!");
         balance -= amount;
-        require(balance >= 0, "Withdrew more than the account balance!");
         token.transfer(msg.sender, uint256(amount) * 1000000000000000000);
     }
 

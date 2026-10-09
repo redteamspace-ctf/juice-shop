@@ -7,13 +7,24 @@ import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as utils from '../lib/utils'
-import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
+
+// Internal documents that were accidentally put into the public /ftp folder
+const confidentialFiles = new Set(['acquisitions.md'])
+
+export function isConfidentialFile (file: string) {
+  return confidentialFiles.has(String(file).toLowerCase())
+}
 
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
     const file = params.file
+
+    if (isConfidentialFile(file)) {
+      res.status(403).json({ status: 'error', message: 'This document is not available.' })
+      return
+    }
 
     if (!file.includes('/')) {
       verify(file, res, next)
@@ -24,8 +35,8 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
+    // A null byte would make the served file differ from the name that was checked, so refuse it
+    if (file && !file.includes(String.fromCharCode(0)) && !utils.contains(file.toLowerCase(), '%00') && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
 
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)

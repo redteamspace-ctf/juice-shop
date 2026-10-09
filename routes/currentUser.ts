@@ -8,6 +8,8 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+const publicUserFields = ['id', 'email', 'lastLoginIp', 'profileImage']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -25,8 +27,8 @@ export function retrieveLoggedInUser () {
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
-          for (const field of requestedFields) {
+          // When fields are specified, return only those that are publicly exposable
+          for (const field of publicUserFields.filter(f => requestedFields.includes(f))) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }

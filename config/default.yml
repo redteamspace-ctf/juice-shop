@@ -15,6 +15,12 @@ application:
   altcoinName: Juicycoin
   privacyContactEmail: donotreply@owasp-juice.shop
   customMetricsPrefix: juiceshop
+  profileImageUrlAllowlist: # trusted image hosts (and their subdomains) the server may download profile images from; links to other hosts are stored as links only
+    - cataas.com
+    - i.imgur.com
+    - upload.wikimedia.org
+    - avatars.githubusercontent.com
+    - gravatar.com
   chatBot:
     name: 'Juicy the Smart Assistant'
     avatar: 'JuicyChatBot.png'

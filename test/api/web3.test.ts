@@ -7,9 +7,12 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
+import * as security from '../../lib/insecurity'
 import { createTestApp } from './helpers/setup'
 
 let app: Express
+
+const authHeader = () => ({ Authorization: `Bearer ${security.authorize({ data: { id: 1, email: 'customer@juice-sh.op' } })}` })
 
 const skipReason = process.env.ALCHEMY_API_KEY ? undefined : 'ALCHEMY_API_KEY not set'
 
@@ -64,15 +67,14 @@ void describe('/submitKey', { skip: skipReason }, () => {
     assert.equal(res.body.message, 'Looks like you entered the public address of my ethereum wallet!')
   })
 
-  void it('POST private key in request body gets accepted', async () => {
+  void it('POST formerly leaked private key in request body gets rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/submitKey')
       .send({ privateKey: '0x5bcc3e9d38baa06e7bfaab80ae5957bbe8ef059e640311d7d6d465e6bc948e3e' })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 401)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Challenge successfully solved')
+    assert.equal(res.body.success, false)
   })
 })
 
@@ -88,9 +90,18 @@ void describe('/nftUnlocked', { skip: skipReason }, () => {
 })
 
 void describe('/nftMintListen', { skip: skipReason }, () => {
+  void it('GET without being logged in is rejected', async () => {
+    const res = await request(app)
+      .get('/rest/web3/nftMintListen')
+
+    assert.equal(res.status, 401)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+  })
+
   void it('GET call confirms registration of event listener', async () => {
     const res = await request(app)
       .get('/rest/web3/nftMintListen')
+      .set(authHeader())
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -100,9 +111,19 @@ void describe('/nftMintListen', { skip: skipReason }, () => {
 })
 
 void describe('/walletNFTVerify', { skip: skipReason }, () => {
+  void it('POST without being logged in is rejected', async () => {
+    const res = await request(app)
+      .post('/rest/web3/walletNFTVerify')
+      .send({ walletAddress: '0x1234567890123456789012345678901234567890' })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+  })
+
   void it('POST missing wallet address fails to solve minting challenge', async () => {
     const res = await request(app)
       .post('/rest/web3/walletNFTVerify')
+      .set(authHeader())
       .send({})
 
     assert.equal(res.status, 200)
@@ -114,6 +135,7 @@ void describe('/walletNFTVerify', { skip: skipReason }, () => {
   void it('POST invalid wallet address fails to solve minting challenge', async () => {
     const res = await request(app)
       .post('/rest/web3/walletNFTVerify')
+      .set(authHeader())
       .send({ walletAddress: 'lalalalala' })
 
     assert.equal(res.status, 200)
@@ -124,36 +146,46 @@ void describe('/walletNFTVerify', { skip: skipReason }, () => {
 })
 
 void describe('/walletExploitAddress', { skip: skipReason }, () => {
-  void it('POST missing wallet address in request body still leads to success notification', async () => {
+  void it('POST without being logged in is rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .send({ walletAddress: '0x1234567890123456789012345678901234567890' })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.status, 'error')
+  })
+
+  void it('POST missing wallet address in request body is rejected', async () => {
+    const res = await request(app)
+      .post('/rest/web3/walletExploitAddress')
+      .set(authHeader())
       .send({})
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Event Listener Created')
+    assert.equal(res.body.success, false)
   })
 
-  void it('POST invalid wallet address in request body still leads to success notification', async () => {
+  void it('POST invalid wallet address in request body is rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .set(authHeader())
       .send({ walletAddress: 'lalalalala' })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Event Listener Created')
+    assert.equal(res.body.success, false)
   })
 
-  void it('POST self-referential address in request body leads to success notification', async () => {
+  void it('POST self-referential address in request body is rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .set(authHeader())
       .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0' })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Event Listener Created')
+    assert.equal(res.body.success, false)
   })
 })

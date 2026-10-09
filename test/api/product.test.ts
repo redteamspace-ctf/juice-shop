@@ -10,9 +10,7 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import type { Product as ProductConfig } from '../../lib/config.types'
-import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 
 const tamperingProductId = config.get<ProductConfig[]>('products').findIndex((product) => !!product.urlForProductTamperingChallenge) + 1
 
@@ -54,21 +52,19 @@ void describe('/api/Products', () => {
     assert.equal(res.status, 401)
   })
 
-  if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-    void it('POST new product does not filter XSS attacks', async () => {
-      const res = await request(app)
-        .post('/api/Products')
-        .set(authHeader)
-        .send({
-          name: 'XSS Juice (42ml)',
-          description: '<iframe src="javascript:alert(`xss`)">',
-          price: 9999.99,
-          image: 'xss3juice.jpg'
-        })
-      assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.description, '<iframe src="javascript:alert(`xss`)">')
-    })
-  }
+  void it('POST new product filters XSS attacks from description', async () => {
+    const res = await request(app)
+      .post('/api/Products')
+      .set(authHeader)
+      .send({
+        name: 'XSS Juice (42ml)',
+        description: 'Tasty<iframe src="javascript:alert(`xss`)"> juice with a <a href="https://owasp-juice.shop" target="_blank">link</a>',
+        price: 9999.99,
+        image: 'xss3juice.jpg'
+      })
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.description, 'Tasty juice with a <a href="https://owasp-juice.shop" target="_blank">link</a>')
+  })
 })
 
 void describe('/api/Products/:id', () => {

@@ -69,14 +69,17 @@ describe('fileServer', () => {
     expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
   })
 
-  it('should solve "directoryListingChallenge" when requesting acquisitions.md', () => {
+  it('should refuse the confidential acquisitions.md without solving "directoryListingChallenge"', () => {
     challenges.directoryListingChallenge = { solved: false, save } as unknown as Challenge
     req.params.file = 'acquisitions.md'
+    res.status = sinon.stub().returns(res)
+    res.json = sinon.spy()
 
     servePublicFiles()(req, res, next)
 
-    expect(res.sendFile).to.have.been.calledWith(sinon.match(/ftp[/\\]acquisitions\.md/))
-    expect(challenges.directoryListingChallenge.solved).to.equal(true)
+    expect(res.sendFile).to.have.callCount(0)
+    expect(res.status).to.have.been.calledWith(403)
+    expect(challenges.directoryListingChallenge.solved).to.equal(false)
   })
 
   it('should solve "easterEggLevelOneChallenge" when requesting eastere.gg with Poison Null Byte attack', () => {

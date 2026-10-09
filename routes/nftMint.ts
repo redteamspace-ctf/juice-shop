@@ -38,8 +38,8 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      const metamaskAddress = req.body.walletAddress
-      if (addressesMinted.has(metamaskAddress)) {
+      const metamaskAddress = req.body?.walletAddress
+      if (typeof metamaskAddress === 'string' && /^0x[0-9a-fA-F]{40}$/.test(metamaskAddress) && addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })

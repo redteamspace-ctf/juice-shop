@@ -71,11 +71,11 @@ void describe('/ftp', () => {
     assert.equal(res.status, 403)
   })
 
-  void it('GET the confidential file in /ftp', async () => {
+  void it('GET the confidential file in /ftp is refused', async () => {
     const res = await request(app)
       .get('/ftp/acquisitions.md')
-    assert.equal(res.status, 200)
-    assert.ok(res.text.includes('# Planned Acquisitions'))
+    assert.equal(res.status, 403)
+    assert.ok(!res.text.includes('# Planned Acquisitions'))
   })
 
   void it('GET the KeePass database in /ftp', async () => {

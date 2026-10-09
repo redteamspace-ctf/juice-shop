@@ -58,6 +58,17 @@ void describe('/rest/products/:id/reviews', () => {
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
   })
+
+  void it('PUT product review cannot be created in the name of another user', async () => {
+    const message = 'Forged ' + Date.now()
+    const res = await request(app)
+      .put('/rest/products/1/reviews')
+      .send({ message, author: 'admin@juice-sh.op' })
+    assert.equal(res.status, 201)
+    const reviews = await request(app).get('/rest/products/1/reviews')
+    const review = reviews.body.data.find((r: { message: string }) => r.message === message)
+    assert.equal(review.author, 'Anonymous')
+  })
 })
 
 void describe('/rest/products/reviews', () => {

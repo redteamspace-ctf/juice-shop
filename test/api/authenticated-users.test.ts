@@ -27,7 +27,7 @@ void describe('/rest/user/authentication-details', () => {
       .set(authHeader)
 
     assert.equal(res.status, 200)
-    const userWithAsterisks = res.body.data.find((user: any) => user.password === '********************************')
+    const userWithAsterisks = res.body.data.find((user: any) => /^\*+$/.test(user.password))
     assert.ok(userWithAsterisks, 'Expected at least one user with password replaced by asterisks')
   })
 

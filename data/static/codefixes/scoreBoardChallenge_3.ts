@@ -1,9 +1,12 @@
 const routes: Routes = [
-  {
-    path: 'administration',
-    component: AdministrationComponent,
-    canActivate: [AdminGuard]
-  },
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -154,10 +157,6 @@ const routes: Routes = [
   {
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
-  },
-  {
-    path: 'web3-sandbox',
-    loadChildren: async () => await loadWeb3SandboxModule()
   },
   {
     path: 'chatbot',

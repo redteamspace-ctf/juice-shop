@@ -12,7 +12,13 @@ let isEventListenerCreated = false
 
 export function contractExploitListener () {
   return async (req: Request, res: Response) => {
-    const metamaskAddress = req.body.walletAddress
+    const metamaskAddress = req.body?.walletAddress
+    // Only track well-formed external wallets, never the bank contract itself
+    if (typeof metamaskAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(metamaskAddress) ||
+      metamaskAddress.toLowerCase() === web3WalletAddress.toLowerCase()) {
+      res.status(200).json({ success: false, message: 'Invalid wallet address' })
+      return
+    }
     walletsConnected.add(metamaskAddress)
     try {
       if (!isEventListenerCreated) {

@@ -18,26 +18,65 @@
 		"removed": []
 	},
 	"adminSectionChallenge_1_correct.ts": {
+		"added": [],
+		"removed": []
+	},
+	"adminSectionChallenge_2.ts": {
 		"added": [
-			7
-		],
-		"removed": [
+			2,
+			3,
+			4,
+			5,
+			6,
 			7,
 			8,
 			9
+		],
+		"removed": [
+			4,
+			5,
+			6,
+			7,
+			8
 		]
 	},
-	"adminSectionChallenge_2.ts": {
-		"added": [],
-		"removed": []
-	},
 	"adminSectionChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9
+		],
+		"removed": [
+			4,
+			5,
+			6,
+			7,
+			8
+		]
 	},
 	"adminSectionChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9
+		],
+		"removed": [
+			4,
+			5,
+			6,
+			7,
+			8
+		]
 	},
 	"changeProductChallenge_1.ts": {
 		"added": [
@@ -689,7 +728,8 @@
 			2,
 			6,
 			7,
-			8
+			8,
+			9
 		]
 	},
 	"directoryListingChallenge_1_correct.ts": {
@@ -895,6 +935,9 @@
 	"redirectChallenge_3.ts": {
 		"added": [],
 		"removed": [
+			15,
+			16,
+			17,
 			18,
 			19,
 			20,
@@ -904,10 +947,7 @@
 			24,
 			25,
 			26,
-			27,
-			28,
-			29,
-			30
+			27
 		]
 	},
 	"redirectChallenge_4_correct.ts": {
@@ -916,11 +956,17 @@
 	},
 	"redirectCryptoCurrencyChallenge_1.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			3,
+			4
+		]
 	},
 	"redirectCryptoCurrencyChallenge_2.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			3,
+			4
+		]
 	},
 	"redirectCryptoCurrencyChallenge_3_correct.ts": {
 		"added": [],
@@ -928,7 +974,10 @@
 	},
 	"redirectCryptoCurrencyChallenge_4.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			3,
+			4
+		]
 	},
 	"registerAdminChallenge_1.ts": {
 		"added": [],
@@ -1203,23 +1252,44 @@
 		]
 	},
 	"restfulXssChallenge_1_correct.ts": {
-		"added": [
-			42,
-			43
-		],
+		"added": [],
 		"removed": []
 	},
 	"restfulXssChallenge_2.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			8,
+			41,
+			42,
+			43,
+			44,
+			45,
+			46
+		]
 	},
 	"restfulXssChallenge_3.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			8,
+			41,
+			42,
+			43,
+			44,
+			45,
+			46
+		]
 	},
 	"restfulXssChallenge_4.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			8,
+			41,
+			42,
+			43,
+			44,
+			45,
+			46
+		]
 	},
 	"scoreBoardChallenge_1_correct.ts": {
 		"added": [],
@@ -1231,7 +1301,7 @@
 	},
 	"scoreBoardChallenge_3.ts": {
 		"added": [
-			113
+			116
 		],
 		"removed": []
 	},
@@ -1267,7 +1337,9 @@
 	},
 	"unionSqlInjectionChallenge_1.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			6
+		]
 	},
 	"unionSqlInjectionChallenge_2_correct.ts": {
 		"added": [
@@ -1285,7 +1357,8 @@
 			6,
 			7,
 			8,
-			9
+			9,
+			10
 		]
 	},
 	"weakPasswordChallenge_1_correct.ts": {
@@ -1318,18 +1391,28 @@
 		"removed": []
 	},
 	"web3SandboxChallenge_1_correct.ts": {
-		"added": [
-			166
-		],
+		"added": [],
 		"removed": []
 	},
 	"web3SandboxChallenge_2.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			166,
+			167,
+			168,
+			169,
+			170
+		]
 	},
 	"web3SandboxChallenge_3.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			166,
+			167,
+			168,
+			169,
+			170
+		]
 	},
 	"web3WalletChallenge_1.sol": {
 		"added": [],

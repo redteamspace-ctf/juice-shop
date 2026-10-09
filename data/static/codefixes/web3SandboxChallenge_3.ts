@@ -1,9 +1,12 @@
 const routes: Routes = [
-  {
-    path: 'administration',
-    component: AdministrationComponent,
-    canActivate: [AdminGuard]
-  },
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,

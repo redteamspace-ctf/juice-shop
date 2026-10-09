@@ -130,10 +130,10 @@ describe('ContactComponent', () => {
         expect(component.captchaControl.valid).toBe(true)
     })
 
-    it('should store the captcha and the captchaId on getting new captcha', () => {
-        captchaService.getCaptcha.mockReturnValue(of({ captcha: 'captcha', captchaId: 2 }))
+    it('should store the captcha image and the captchaId on getting new captcha', () => {
+        captchaService.getCaptcha.mockReturnValue(of({ image: '<svg></svg>', captchaId: 2 }))
         component.getNewCaptcha()
-        expect(component.captcha).toBe('captcha')
+        expect(component.captcha).toBeTruthy()
         expect(component.captchaId).toBe(2)
     })
 
