@@ -14,6 +14,9 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      return res.status(401).json({ status: 'error' })
+    }
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
       () => user?.data?.email !== req.body.author
@@ -22,8 +25,8 @@ export function createProductReviews () {
     try {
       await reviewsCollection.insert({
         product: req.params.id,
-        message: req.body.message,
-        author: req.body.author,
+        message: utils.trunc(String(req.body.message ?? '').replace(/[<>]/g, ''), 500),
+        author: user.data.email,
         likesCount: 0,
         likedBy: []
       })

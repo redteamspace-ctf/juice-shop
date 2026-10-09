@@ -14,13 +14,19 @@ import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 
 export function resetPassword () {
-  return async ({ body, connection }: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const { body, connection } = req
     const email = body.email
     const answer = body.answer
     const newPassword = body.new
     const repeatPassword = body.repeat
     if (!email || !answer) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
+      return
+    }
+    const authenticatedUser = security.authenticatedUsers.from(req)
+    if (!authenticatedUser?.data || authenticatedUser.data.email !== email) {
+      res.status(401).send(res.__('Authentication is required to reset this password.'))
       return
     }
     if (!newPassword || newPassword === 'undefined') {

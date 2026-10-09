@@ -9,8 +9,6 @@ contract ETHWalletBank {
   mapping(address => uint) public balances;
   mapping(address => uint) public userWithdrawing;
 
-  event ContractExploited(address indexed culprit);
-
   function ethdeposit(address _to) public payable {
     balances[_to] = balances[_to].add(msg.value);
   }
@@ -25,17 +23,12 @@ contract ETHWalletBank {
     if (userWithdrawing[msg.sender] <= 1) {
       userWithdrawing[msg.sender] = userWithdrawing[msg.sender] + 1;
     } else {
-      emit ContractExploited(tx.origin); // vuln-code-snippet hide-line
       userWithdrawing[msg.sender] = 0;
       return;
     }
+    balances[msg.sender] -= _amount; // vuln-code-snippet vuln-line web3WalletChallenge
     (bool result, ) = msg.sender.call{ value: _amount }(""); // vuln-code-snippet neutral-line web3WalletChallenge
     require(result, "Withdrawal call failed"); // vuln-code-snippet neutral-line web3WalletChallenge
-    balances[msg.sender] -= _amount; // vuln-code-snippet vuln-line web3WalletChallenge
-    if(userWithdrawing[msg.sender] == 2) // vuln-code-snippet hide-line
-    { // vuln-code-snippet hide-line
-      emit ContractExploited(tx.origin); // vuln-code-snippet hide-line
-    } // vuln-code-snippet hide-line
     userWithdrawing[msg.sender] = 0;
   }
 

@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs'
+import net from 'node:net'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -16,8 +17,18 @@ import logger from '../lib/logger'
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
-      const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+      const url = String(req.body.imageUrl)
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(url)
+      } catch {
+        res.status(400).json({ error: 'Invalid image URL' })
+        return
+      }
+      if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname === 'localhost' || net.isIP(parsedUrl.hostname) !== 0) {
+        res.status(400).json({ error: 'Invalid image URL' })
+        return
+      }
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
@@ -31,14 +42,9 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
-          try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
-          }
+          logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}`)
+          res.status(400).json({ error: 'Unable to retrieve image' })
+          return
         }
       } else {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
